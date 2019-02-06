@@ -34,12 +34,12 @@ using System.Xml;
 
 namespace OpenRasterFileType
 	{
-	public class OraFileType : FileType
+	public class OraFileType: FileType
 		{
 		private const int ThumbMaxSize = 256;
 
 		// Base64 encoded .zip file containing just a uncompressed file called mimetype for OpenRaster.
-		private string MimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
+		private readonly string MimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
 
 		private static Dictionary<LayerBlendMode, string> BlendDict = new Dictionary<LayerBlendMode, string>()
 			{
@@ -135,7 +135,7 @@ namespace OpenRasterFileType
 						{
 						MimeType = Reader.ReadToEnd();
 						}
-					
+
 					if (!MimeType.Equals("image/openraster", StringComparison.Ordinal))
 						throw new FormatException("Incorrect mimetype: " + MimeType);
 					}
@@ -300,7 +300,7 @@ namespace OpenRasterFileType
 
 			using (ZipArchive Archive = new ZipArchive(output, ZipArchiveMode.Update, true))
 				{
-				
+
 				LayerInfo[] LayerInfo = new LayerInfo[input.Layers.Count];
 
 				for (int i = 0; i < input.Layers.Count; i++)
@@ -482,7 +482,7 @@ namespace OpenRasterFileType
 				Settings.ConformanceLevel = ConformanceLevel.Document;
 				Settings.CloseOutput = false;
 				XmlWriter Writer = XmlWriter.Create(ms, Settings);
-				
+
 				Writer.WriteStartDocument();
 
 				Writer.WriteStartElement("image");
@@ -568,7 +568,7 @@ namespace OpenRasterFileType
 			}
 		}
 
-	public class MyFileTypeFactory : IFileTypeFactory
+	public class MyFileTypeFactory: IFileTypeFactory
 		{
 		public FileType[] GetFileTypeInstances()
 			{
