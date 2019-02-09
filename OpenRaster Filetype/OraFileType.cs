@@ -1,6 +1,6 @@
 ﻿// paint.net OpenRaster Format Plugin
 // 
-// Copyright (c) 2017 Zagna https://github.com/Zagna & Nicholas Hayes https://github.com/0xC0000054
+// Copyright (c) 2019 Zagna https://github.com/Zagna & Nicholas Hayes https://github.com/0xC0000054
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,7 @@ namespace OpenRasterFileType
 		private static readonly Dictionary<string, LayerBlendMode> SVGDict = BlendDict.ToDictionary(x => x.Value, x => x.Key);
 
 		public OraFileType()
-			: base("OpenRaster", FileTypeFlags.SupportsLoading | FileTypeFlags.SupportsSaving | FileTypeFlags.SupportsLayers, new String[] { ".ora" })
+			: base("OpenRaster", FileTypeFlags.SupportsLoading | FileTypeFlags.SupportsSaving | FileTypeFlags.SupportsLayers, new string[] { ".ora" })
 			{
 			StrokeMapVersions = new string[2] { "mypaint_strokemap", "mypaint_strokemap_v2" };
 			}
@@ -75,7 +75,7 @@ namespace OpenRasterFileType
 		/// <param name="inStream">The input stream containing the layer image.</param>
 		/// <param name="baseWidth">The width of the base document.</param>
 		/// <param name="baseHeight">The height of the base document.</param>
-		private unsafe Bitmap getBitmapFromOraLayer(int xofs, int yofs, Stream inStream, int baseWidth, int baseHeight)
+		private static unsafe Bitmap getBitmapFromOraLayer(int xofs, int yofs, Stream inStream, int baseWidth, int baseHeight)
 			{
 			Bitmap Image = null;
 
@@ -86,7 +86,7 @@ namespace OpenRasterFileType
 					BitmapData LayerData = Layer.LockBits(new Rectangle(xofs, yofs, BMP.Width, BMP.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 					BitmapData BMPData = BMP.LockBits(new Rectangle(0, 0, BMP.Width, BMP.Height), ImageLockMode.ReadOnly, BMP.PixelFormat);
 
-					int bpp = Bitmap.GetPixelFormatSize(BMP.PixelFormat) / 8;
+					int bpp = System.Drawing.Image.GetPixelFormatSize(BMP.PixelFormat) / 8;
 
 					for (int y = 0; y < BMP.Height; y++)
 						{
@@ -137,7 +137,9 @@ namespace OpenRasterFileType
 						}
 
 					if (!MimeType.Equals("image/openraster", StringComparison.Ordinal))
+						{
 						throw new FormatException("Incorrect mimetype: " + MimeType);
+						}
 					}
 				catch (NullReferenceException)
 					{
@@ -162,7 +164,10 @@ namespace OpenRasterFileType
 				XmlNodeList LayerElements = stackElement.GetElementsByTagName("layer");
 
 				if (LayerElements.Count == 0)
+					{
 					throw new FormatException("No layers found in OpenRaster file");
+					}
+
 				int LayerCount = LayerElements.Count - 1;
 
 				for (int i = LayerCount; i >= 0; i--) // The last layer in the list is the background so load in reverse
@@ -172,8 +177,6 @@ namespace OpenRasterFileType
 					int y = int.Parse(getAttribute(LayerElement, "y", "0"), CultureInfo.InvariantCulture); // the y offset within the layer
 
 					int LayerNum = LayerCount - i;
-
-					string name = getAttribute(LayerElement, "name", string.Format("Layer {0}", LayerNum, CultureInfo.InvariantCulture));
 
 					ZipArchiveEntry zf = File.GetEntry(LayerElement.GetAttribute("src"));
 
@@ -192,11 +195,15 @@ namespace OpenRasterFileType
 								myLayer = new BitmapLayer(Width, Height);
 								}
 
-							myLayer.Name = name;
-							myLayer.Opacity = ((byte)(255.0 * double.Parse(getAttribute(LayerElement, "opacity", "1"), CultureInfo.InvariantCulture)));
-							myLayer.Visible = (getAttribute(LayerElement, "visibility", "visible") == "visible"); // newer ora files have this
+							myLayer.Name = getAttribute(LayerElement, "name", $"Layer {LayerNum}");
+							myLayer.Opacity = (byte)(255.0 * double.Parse(getAttribute(LayerElement, "opacity", "1"), CultureInfo.InvariantCulture));
+							myLayer.Visible = getAttribute(LayerElement, "visibility", "visible") == "visible"; // newer ora files have this
 
 							string compop = getAttribute(LayerElement, "composite-op", "svg:src-over");
+							if (compop.Contains("pdn-"))
+								{
+								compop = compop.Replace("pdn-", "pdn:");
+								}
 
 							try
 								{
@@ -215,7 +222,7 @@ namespace OpenRasterFileType
 									}
 								}
 
-							myLayer.Surface.CopyFromGdipBitmap(BMP, false); // does this make sense?
+							myLayer.Surface.CopyFromGdipBitmap(BMP, false);
 
 							string backTile = getAttribute(LayerElement, "background_tile", string.Empty);
 
@@ -307,12 +314,16 @@ namespace OpenRasterFileType
 
 		protected override void OnSave(Document input, Stream output, SaveConfigToken token, Surface scratchSurface, ProgressEventHandler callback)
 			{
+			if (input == null || output == null)
+				{
+				throw new ArgumentNullException("Null error");
+				}
+
 			byte[] DataBytes = Convert.FromBase64String(MimeTypeZip);
 			output.Write(DataBytes, 0, DataBytes.Length);
 
 			using (ZipArchive Archive = new ZipArchive(output, ZipArchiveMode.Update, true))
 				{
-
 				LayerInfo[] LayerInfo = new LayerInfo[input.Layers.Count];
 
 				for (int i = 0; i < input.Layers.Count; i++)
@@ -359,7 +370,7 @@ namespace OpenRasterFileType
 
 					if (Left < Layer.Width && Top < Layer.Height) // is the layer not empty
 						{
-						Bounds = new Rectangle(Left, Top, (Right - Left) + 1, (Bottom - Top) + 1); // clip it to the visible rectangle
+						Bounds = new Rectangle(Left, Top, Right - Left + 1, Bottom - Top + 1); // clip it to the visible rectangle
 						LayerInfo[i] = new LayerInfo(Left, Top);
 						}
 					else
@@ -434,7 +445,7 @@ namespace OpenRasterFileType
 							break;
 
 						default:
-							throw new InvalidEnumArgumentException();
+							throw new InvalidEnumArgumentException("Invalid measurement unit.");
 						}
 
 					DataBytes = getLayerXmlData(input.Layers, LayerInfo, dpiX, dpiY);
@@ -460,15 +471,16 @@ namespace OpenRasterFileType
 
 					Size thumbSize = getThumbDimensions(input.Width, input.Height);
 
-					Surface Scale = new Surface(thumbSize);
-					Scale.FitSurface(ResamplingAlgorithm.SuperSampling, Flat);
-
-					using (MemoryStream ms = new MemoryStream())
+					using (Surface Scale = new Surface(thumbSize))
 						{
-						Scale.CreateAliasedBitmap().Save(ms, ImageFormat.Png);
-						DataBytes = ms.ToArray();
+						Scale.FitSurface(ResamplingAlgorithm.SuperSampling, Flat);
+
+						using (MemoryStream ms = new MemoryStream())
+							{
+							Scale.CreateAliasedBitmap().Save(ms, ImageFormat.Png);
+							DataBytes = ms.ToArray();
+							}
 						}
-					Scale.Dispose();
 
 					ZipArchiveEntry Thumbsy = Archive.CreateEntry("Thumbnails/thumbnail.png");
 
@@ -478,11 +490,9 @@ namespace OpenRasterFileType
 						}
 					}
 				}
-
-			System.Diagnostics.Debug.WriteLine("All done here");
 			}
 
-		private byte[] getLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) // OraFormat.cs - some changes
+		private static byte[] getLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) // OraFormat.cs - some changes
 			{
 			byte[] buf = null;
 
@@ -564,15 +574,13 @@ namespace OpenRasterFileType
 			return buf;
 			}
 
-		private Size getThumbDimensions(int width, int height) // OraFormat.cs
+		private static Size getThumbDimensions(int width, int height) // OraFormat.cs
 			{
-			if (width <= ThumbMaxSize && height <= ThumbMaxSize)
-				return new Size(width, height);
-
-			if (width > height)
-				return new Size(ThumbMaxSize, (int)((double)height / width * ThumbMaxSize));
-			else
-				return new Size((int)((double)width / height * ThumbMaxSize), ThumbMaxSize);
+			return width <= ThumbMaxSize && height <= ThumbMaxSize
+				? new Size(width, height)
+				: width > height
+				? new Size(ThumbMaxSize, (int)((double)height / width * ThumbMaxSize))
+				: new Size((int)((double)width / height * ThumbMaxSize), ThumbMaxSize);
 			}
 
 		private static string getAttribute(XmlElement element, string attribute, string defValue) // OraFormat.cs
