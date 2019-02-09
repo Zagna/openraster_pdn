@@ -48,18 +48,18 @@ namespace OpenRasterFileType
 			{ LayerBlendMode.Additive, "svg:plus" },
 			{ LayerBlendMode.ColorBurn, "svg:color-burn" },
 			{ LayerBlendMode.ColorDodge, "svg:color-dodge" },
-			{ LayerBlendMode.Reflect, "pdn-reflect" },
-			{ LayerBlendMode.Glow, "pdn-glow" },
+			{ LayerBlendMode.Reflect, "pdn:reflect" },
+			{ LayerBlendMode.Glow, "pdn:glow" },
 			{ LayerBlendMode.Overlay, "svg:overlay" },
 			{ LayerBlendMode.Difference, "svg:difference" },
-			{ LayerBlendMode.Negation, "pdn-negation" },
+			{ LayerBlendMode.Negation, "pdn:negation" },
 			{ LayerBlendMode.Lighten, "svg:lighten" },
 			{ LayerBlendMode.Darken, "svg:darken" },
 			{ LayerBlendMode.Screen, "svg:screen" },
 			{ LayerBlendMode.Xor, "svg:xor" }
 			};
 
-		private static Dictionary<string, LayerBlendMode> SVGDict = BlendDict.ToDictionary(x => x.Value, x => x.Key);
+		private static readonly Dictionary<string, LayerBlendMode> SVGDict = BlendDict.ToDictionary(x => x.Value, x => x.Key);
 
 		public OraFileType()
 			: base("OpenRaster", FileTypeFlags.SupportsLoading | FileTypeFlags.SupportsSaving | FileTypeFlags.SupportsLayers, new String[] { ".ora" })
@@ -75,7 +75,7 @@ namespace OpenRasterFileType
 		/// <param name="inStream">The input stream containing the layer image.</param>
 		/// <param name="baseWidth">The width of the base document.</param>
 		/// <param name="baseHeight">The height of the base document.</param>
-		private unsafe Bitmap GetBitmapFromOraLayer(int xofs, int yofs, Stream inStream, int baseWidth, int baseHeight)
+		private unsafe Bitmap getBitmapFromOraLayer(int xofs, int yofs, Stream inStream, int baseWidth, int baseHeight)
 			{
 			Bitmap Image = null;
 
@@ -151,10 +151,12 @@ namespace OpenRasterFileType
 				int Width = int.Parse(ImageElement.GetAttribute("w"), CultureInfo.InvariantCulture);
 				int Height = int.Parse(ImageElement.GetAttribute("h"), CultureInfo.InvariantCulture);
 
-				Document doc = new Document(Width, Height);
-				doc.DpuUnit = MeasurementUnit.Inch;
-				doc.DpuX = double.Parse(GetAttribute(ImageElement, "xres", "72"), CultureInfo.InvariantCulture);
-				doc.DpuY = double.Parse(GetAttribute(ImageElement, "yres", "72"), CultureInfo.InvariantCulture);
+				Document doc = new Document(Width, Height)
+					{
+					DpuUnit = MeasurementUnit.Inch,
+					DpuX = double.Parse(getAttribute(ImageElement, "xres", "72"), CultureInfo.InvariantCulture),
+					DpuY = double.Parse(getAttribute(ImageElement, "yres", "72"), CultureInfo.InvariantCulture)
+					};
 
 				XmlElement stackElement = (XmlElement)stackXml.GetElementsByTagName("stack")[0];
 				XmlNodeList LayerElements = stackElement.GetElementsByTagName("layer");
@@ -166,18 +168,18 @@ namespace OpenRasterFileType
 				for (int i = LayerCount; i >= 0; i--) // The last layer in the list is the background so load in reverse
 					{
 					XmlElement LayerElement = (XmlElement)LayerElements[i];
-					int x = int.Parse(GetAttribute(LayerElement, "x", "0"), CultureInfo.InvariantCulture); // the x offset within the layer
-					int y = int.Parse(GetAttribute(LayerElement, "y", "0"), CultureInfo.InvariantCulture); // the y offset within the layer
+					int x = int.Parse(getAttribute(LayerElement, "x", "0"), CultureInfo.InvariantCulture); // the x offset within the layer
+					int y = int.Parse(getAttribute(LayerElement, "y", "0"), CultureInfo.InvariantCulture); // the y offset within the layer
 
 					int LayerNum = LayerCount - i;
 
-					string name = GetAttribute(LayerElement, "name", string.Format("Layer {0}", LayerNum, CultureInfo.InvariantCulture));
+					string name = getAttribute(LayerElement, "name", string.Format("Layer {0}", LayerNum, CultureInfo.InvariantCulture));
 
 					ZipArchiveEntry zf = File.GetEntry(LayerElement.GetAttribute("src"));
 
 					using (Stream s = zf.Open())
 						{
-						using (Bitmap BMP = GetBitmapFromOraLayer(x, y, s, Width, Height))
+						using (Bitmap BMP = getBitmapFromOraLayer(x, y, s, Width, Height))
 							{
 							BitmapLayer myLayer = null;
 
@@ -191,21 +193,31 @@ namespace OpenRasterFileType
 								}
 
 							myLayer.Name = name;
-							myLayer.Opacity = ((byte)(255.0 * double.Parse(GetAttribute(LayerElement, "opacity", "1"), CultureInfo.InvariantCulture)));
-							myLayer.Visible = (GetAttribute(LayerElement, "visibility", "visible") == "visible"); // newer ora files have this
+							myLayer.Opacity = ((byte)(255.0 * double.Parse(getAttribute(LayerElement, "opacity", "1"), CultureInfo.InvariantCulture)));
+							myLayer.Visible = (getAttribute(LayerElement, "visibility", "visible") == "visible"); // newer ora files have this
+
+							string compop = getAttribute(LayerElement, "composite-op", "svg:src-over");
 
 							try
 								{
-								myLayer.BlendMode = SVGDict[GetAttribute(LayerElement, "composite-op", "svg:src-over")];
+								myLayer.BlendMode = SVGDict[compop];
 								}
 							catch (KeyNotFoundException)
 								{
-								myLayer.BlendMode = LayerBlendMode.Normal;
+								try
+									{
+									string[] compops = compop.Split(':');
+									myLayer.BlendMode = SVGDict["pdn:" + compops[1]];
+									}
+								catch (KeyNotFoundException)
+									{
+									myLayer.BlendMode = LayerBlendMode.Normal;
+									}
 								}
 
 							myLayer.Surface.CopyFromGdipBitmap(BMP, false); // does this make sense?
 
-							string backTile = GetAttribute(LayerElement, "background_tile", string.Empty);
+							string backTile = getAttribute(LayerElement, "background_tile", string.Empty);
 
 							if (!string.IsNullOrEmpty(backTile))
 								{
@@ -238,7 +250,7 @@ namespace OpenRasterFileType
 
 							foreach (string version in StrokeMapVersions)
 								{
-								string strokeMap = GetAttribute(LayerElement, version, string.Empty);
+								string strokeMap = getAttribute(LayerElement, version, string.Empty);
 
 								if (!string.IsNullOrEmpty(strokeMap))
 									{
@@ -425,7 +437,7 @@ namespace OpenRasterFileType
 							throw new InvalidEnumArgumentException();
 						}
 
-					DataBytes = GetLayerXmlData(input.Layers, LayerInfo, dpiX, dpiY);
+					DataBytes = getLayerXmlData(input.Layers, LayerInfo, dpiX, dpiY);
 					Streamy.Write(DataBytes, 0, DataBytes.Length);
 					}
 
@@ -446,7 +458,7 @@ namespace OpenRasterFileType
 						Streamy.Write(DataBytes, 0, DataBytes.Length);
 						}
 
-					Size thumbSize = GetThumbDimensions(input.Width, input.Height);
+					Size thumbSize = getThumbDimensions(input.Width, input.Height);
 
 					Surface Scale = new Surface(thumbSize);
 					Scale.FitSurface(ResamplingAlgorithm.SuperSampling, Flat);
@@ -470,17 +482,19 @@ namespace OpenRasterFileType
 			System.Diagnostics.Debug.WriteLine("All done here");
 			}
 
-		private byte[] GetLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) // OraFormat.cs - some changes
+		private byte[] getLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) // OraFormat.cs - some changes
 			{
 			byte[] buf = null;
 
 			using (MemoryStream ms = new MemoryStream())
 				{
-				XmlWriterSettings Settings = new XmlWriterSettings();
-				Settings.Indent = true;
-				Settings.OmitXmlDeclaration = false;
-				Settings.ConformanceLevel = ConformanceLevel.Document;
-				Settings.CloseOutput = false;
+				XmlWriterSettings Settings = new XmlWriterSettings
+					{
+					Indent = true,
+					OmitXmlDeclaration = false,
+					ConformanceLevel = ConformanceLevel.Document,
+					CloseOutput = false
+					};
 				XmlWriter Writer = XmlWriter.Create(ms, Settings);
 
 				Writer.WriteStartDocument();
@@ -550,7 +564,7 @@ namespace OpenRasterFileType
 			return buf;
 			}
 
-		private Size GetThumbDimensions(int width, int height) // OraFormat.cs
+		private Size getThumbDimensions(int width, int height) // OraFormat.cs
 			{
 			if (width <= ThumbMaxSize && height <= ThumbMaxSize)
 				return new Size(width, height);
@@ -561,7 +575,7 @@ namespace OpenRasterFileType
 				return new Size((int)((double)width / height * ThumbMaxSize), ThumbMaxSize);
 			}
 
-		private static string GetAttribute(XmlElement element, string attribute, string defValue) // OraFormat.cs
+		private static string getAttribute(XmlElement element, string attribute, string defValue) // OraFormat.cs
 			{
 			string ret = element.GetAttribute(attribute);
 			return string.IsNullOrEmpty(ret) ? defValue : ret;
