@@ -158,94 +158,126 @@ namespace OpenRasterFileType
 				int Width = int.Parse(ImageElement.GetAttribute("w"), CultureInfo.InvariantCulture);
 				int Height = int.Parse(ImageElement.GetAttribute("h"), CultureInfo.InvariantCulture);
 
-				using (Document doc = new Document(Width, Height)
+				Document doc = new Document(Width, Height)
 					{
 					DpuUnit = MeasurementUnit.Inch,
 					DpuX = double.Parse(getAttribute(ImageElement, "xres", "72"), CultureInfo.InvariantCulture),
 					DpuY = double.Parse(getAttribute(ImageElement, "yres", "72"), CultureInfo.InvariantCulture)
-					}
-				)
+					};
+
+				XmlElement stackElement = (XmlElement)stackXml.GetElementsByTagName("stack")[0];
+				XmlNodeList LayerElements = stackElement.GetElementsByTagName("layer");
+
+				if (LayerElements.Count == 0)
 					{
-					XmlElement stackElement = (XmlElement)stackXml.GetElementsByTagName("stack")[0];
-					XmlNodeList LayerElements = stackElement.GetElementsByTagName("layer");
+					throw new FormatException("No layers found in OpenRaster file");
+					}
 
-					if (LayerElements.Count == 0)
+				int LayerCount = LayerElements.Count - 1;
+
+				for (int i = LayerCount; i >= 0; i--) // The last layer in the list is the background so load in reverse
+					{
+					XmlElement LayerElement = (XmlElement)LayerElements[i];
+					int x = int.Parse(getAttribute(LayerElement, "x", "0"), CultureInfo.InvariantCulture); // the x offset within the layer
+					int y = int.Parse(getAttribute(LayerElement, "y", "0"), CultureInfo.InvariantCulture); // the y offset within the layer
+
+					int LayerNum = LayerCount - i;
+
+					ZipArchiveEntry zf = File.GetEntry(LayerElement.GetAttribute("src"));
+
+					using (Stream s = zf.Open())
 						{
-						throw new FormatException("No layers found in OpenRaster file");
-						}
-
-					int LayerCount = LayerElements.Count - 1;
-
-					for (int i = LayerCount; i >= 0; i--) // The last layer in the list is the background so load in reverse
-						{
-						XmlElement LayerElement = (XmlElement)LayerElements[i];
-						int x = int.Parse(getAttribute(LayerElement, "x", "0"), CultureInfo.InvariantCulture); // the x offset within the layer
-						int y = int.Parse(getAttribute(LayerElement, "y", "0"), CultureInfo.InvariantCulture); // the y offset within the layer
-
-						int LayerNum = LayerCount - i;
-
-						ZipArchiveEntry zf = File.GetEntry(LayerElement.GetAttribute("src"));
-
-						using (Stream s = zf.Open())
+						using (Bitmap BMP = getBitmapFromOraLayer(x, y, s, Width, Height))
 							{
-							using (Bitmap BMP = getBitmapFromOraLayer(x, y, s, Width, Height))
+							BitmapLayer myLayer = null;
+
+							if (i == LayerCount) // load the background layer first
 								{
-								BitmapLayer myLayer = null;
+								myLayer = Layer.CreateBackgroundLayer(Width, Height);
+								}
+							else
+								{
+								myLayer = new BitmapLayer(Width, Height);
+								}
 
-								if (i == LayerCount) // load the background layer first
-									{
-									myLayer = Layer.CreateBackgroundLayer(Width, Height);
-									}
-								else
-									{
-									myLayer = new BitmapLayer(Width, Height);
-									}
+							myLayer.Name = getAttribute(LayerElement, "name", $"Layer {LayerNum}");
+							myLayer.Opacity = (byte)(255.0 * double.Parse(getAttribute(LayerElement, "opacity", "1"), CultureInfo.InvariantCulture));
+							myLayer.Visible = getAttribute(LayerElement, "visibility", "visible") == "visible"; // newer ora files have this
 
-								myLayer.Name = getAttribute(LayerElement, "name", $"Layer {LayerNum}");
-								myLayer.Opacity = (byte)(255.0 * double.Parse(getAttribute(LayerElement, "opacity", "1"), CultureInfo.InvariantCulture));
-								myLayer.Visible = getAttribute(LayerElement, "visibility", "visible") == "visible"; // newer ora files have this
+							string compop = getAttribute(LayerElement, "composite-op", "svg:src-over");
+							if (compop.Contains("pdn-"))
+								{
+								compop = compop.Replace("pdn-", "pdn:");
+								}
 
-								string compop = getAttribute(LayerElement, "composite-op", "svg:src-over");
-								if (compop.Contains("pdn-"))
-									{
-									compop = compop.Replace("pdn-", "pdn:");
-									}
-
+							try
+								{
+								myLayer.BlendMode = SVGDict[compop];
+								}
+							catch (KeyNotFoundException)
+								{
 								try
 									{
-									myLayer.BlendMode = SVGDict[compop];
+									string[] compops = compop.Split(':');
+									myLayer.BlendMode = SVGDict["pdn:" + compops[1]];
 									}
 								catch (KeyNotFoundException)
 									{
-									try
+									myLayer.BlendMode = LayerBlendMode.Normal;
+									}
+								}
+
+							myLayer.Surface.CopyFromGdipBitmap(BMP, false);
+
+							string backTile = getAttribute(LayerElement, "background_tile", string.Empty);
+
+							if (!string.IsNullOrEmpty(backTile))
+								{
+								ZipArchiveEntry tileZf = File.GetEntry(backTile);
+								byte[] tileBytes = null;
+								using (Stream tileStream = tileZf.Open())
+									{
+									tileBytes = new byte[(int)tileStream.Length];
+
+									int numBytesToRead = (int)tileStream.Length;
+									int numBytesRead = 0;
+									while (numBytesToRead > 0)
 										{
-										string[] compops = compop.Split(':');
-										myLayer.BlendMode = SVGDict["pdn:" + compops[1]];
-										}
-									catch (KeyNotFoundException)
-										{
-										myLayer.BlendMode = LayerBlendMode.Normal;
+										// Read may return anything from 0 to numBytesToRead.
+										int n = tileStream.Read(tileBytes, numBytesRead, numBytesToRead);
+										// The end of the file is reached.
+										if (n == 0)
+											{
+											break;
+											}
+										numBytesRead += n;
+										numBytesToRead -= n;
 										}
 									}
 
-								myLayer.Surface.CopyFromGdipBitmap(BMP, false);
+								string tileData = Convert.ToBase64String(tileBytes);
+								// convert the tile image to a Base64String and then save it in the layer's MetaData.
+								myLayer.Metadata.SetUserValue("OraBackgroundTile", tileData);
+								}
 
-								string backTile = getAttribute(LayerElement, "background_tile", string.Empty);
+							foreach (string version in StrokeMapVersions)
+								{
+								string strokeMap = getAttribute(LayerElement, version, string.Empty);
 
-								if (!string.IsNullOrEmpty(backTile))
+								if (!string.IsNullOrEmpty(strokeMap))
 									{
-									ZipArchiveEntry tileZf = File.GetEntry(backTile);
-									byte[] tileBytes = null;
-									using (Stream tileStream = tileZf.Open())
+									ZipArchiveEntry strokeZf = File.GetEntry(strokeMap);
+									byte[] strokeBytes = null;
+									using (Stream strokeStream = strokeZf.Open())
 										{
-										tileBytes = new byte[(int)tileStream.Length];
+										strokeBytes = new byte[(int)strokeStream.Length];
 
-										int numBytesToRead = (int)tileStream.Length;
+										int numBytesToRead = (int)strokeStream.Length;
 										int numBytesRead = 0;
 										while (numBytesToRead > 0)
 											{
 											// Read may return anything from 0 to numBytesToRead.
-											int n = tileStream.Read(tileBytes, numBytesRead, numBytesToRead);
+											int n = strokeStream.Read(strokeBytes, numBytesRead, numBytesToRead);
 											// The end of the file is reached.
 											if (n == 0)
 												{
@@ -255,54 +287,21 @@ namespace OpenRasterFileType
 											numBytesToRead -= n;
 											}
 										}
+									string strokeData = Convert.ToBase64String(strokeBytes);
+									// convert the stroke map to a Base64String and then save it in the layer's MetaData.
 
-									string tileData = Convert.ToBase64String(tileBytes);
-									// convert the tile image to a Base64String and then save it in the layer's MetaData.
-									myLayer.Metadata.SetUserValue("OraBackgroundTile", tileData);
+									myLayer.Metadata.SetUserValue("OraMyPaintStrokeMapData", strokeData);
+
+									// Save the version of the stroke map in the MetaData
+									myLayer.Metadata.SetUserValue("OraMyPaintStrokeMapVersion", version);
 									}
-
-								foreach (string version in StrokeMapVersions)
-									{
-									string strokeMap = getAttribute(LayerElement, version, string.Empty);
-
-									if (!string.IsNullOrEmpty(strokeMap))
-										{
-										ZipArchiveEntry strokeZf = File.GetEntry(strokeMap);
-										byte[] strokeBytes = null;
-										using (Stream strokeStream = strokeZf.Open())
-											{
-											strokeBytes = new byte[(int)strokeStream.Length];
-
-											int numBytesToRead = (int)strokeStream.Length;
-											int numBytesRead = 0;
-											while (numBytesToRead > 0)
-												{
-												// Read may return anything from 0 to numBytesToRead.
-												int n = strokeStream.Read(strokeBytes, numBytesRead, numBytesToRead);
-												// The end of the file is reached.
-												if (n == 0)
-													{
-													break;
-													}
-												numBytesRead += n;
-												numBytesToRead -= n;
-												}
-											}
-										string strokeData = Convert.ToBase64String(strokeBytes);
-										// convert the stroke map to a Base64String and then save it in the layer's MetaData.
-
-										myLayer.Metadata.SetUserValue("OraMyPaintStrokeMapData", strokeData);
-
-										// Save the version of the stroke map in the MetaData
-										myLayer.Metadata.SetUserValue("OraMyPaintStrokeMapVersion", version);
-										}
-									}
-								doc.Layers.Insert(LayerNum, myLayer);
 								}
+							doc.Layers.Insert(LayerNum, myLayer);
 							}
 						}
-					return doc;
 					}
+				return doc;
+
 				}
 			}
 
