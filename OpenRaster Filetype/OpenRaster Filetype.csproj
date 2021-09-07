@@ -1,21 +1,9 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="Current" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>9.0.21022</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{DE9AE915-F615-42E6-B738-0536102787C8}</ProjectGuid>
+    <TargetFrameworks>net5.0-windows;net48</TargetFrameworks>
     <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>OpenRasterFileType</RootNamespace>
     <AssemblyName>OpenRasterFileType</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <FileUpgradeFlags>
-    </FileUpgradeFlags>
-    <OldToolsVersion>3.5</OldToolsVersion>
-    <UpgradeBackupLocation />
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -31,96 +19,41 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-    <TargetFrameworkProfile>
-    </TargetFrameworkProfile>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>openraster-filetype.pfx</AssemblyOriginatorKeyFile>
   </PropertyGroup>
+  <PropertyGroup/>
   <ItemGroup>
-    <Reference Include="PaintDotNet.Base, Version=4.0.5034.2167, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="PaintDotNet.Base">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Paint.NET\PaintDotNet.Base.dll</HintPath>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Base.dll</HintPath>
     </Reference>
-    <Reference Include="PaintDotNet.Core, Version=4.0.5034.2167, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="PaintDotNet.Core">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Paint.NET\PaintDotNet.Core.dll</HintPath>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Core.dll</HintPath>
     </Reference>
-    <Reference Include="PaintDotNet.Data, Version=4.0.5034.2167, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="PaintDotNet.Data">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Paint.NET\PaintDotNet.Data.dll</HintPath>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Data.dll</HintPath>
     </Reference>
-    <Reference Include="PaintDotNet.Effects, Version=4.0.5034.2167, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="PaintDotNet.Effects">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Paint.NET\PaintDotNet.Effects.dll</HintPath>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Effects.dll</HintPath>
     </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.IO.Compression" />
-    <Reference Include="System.Xml" />
-    <Reference Include="WindowsBase" />
+    <Reference Include="System.IO.Compression"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="OraFileType.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <None Include="openraster-filetype.pfx"/>
+    <Content Include="OraFileType.cs"/>
   </ItemGroup>
   <ItemGroup>
-    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
-      <Visible>False</Visible>
-      <ProductName>Windows Installer 3.1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
+    <PackageReference Include="System.Drawing.Common" Version="5.0.2"/>
+    <PackageReference Include="System.IO.Compression" Version="4.3.0"/>
   </ItemGroup>
   <ItemGroup>
-    <WCFMetadata Include="Service References\" />
+    <Compile Remove="bak\obj\Debug\.NETFramework,Version=v4.8.AssemblyAttributes.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="openraster-filetype.pfx" />
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
-  </PropertyGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
 </Project>

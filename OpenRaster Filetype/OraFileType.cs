@@ -1,6 +1,6 @@
 ﻿// paint.net OpenRaster Format Plugin
 // 
-// Copyright (c) 2019 Zagna https://github.com/Zagna & Nicholas Hayes https://github.com/0xC0000054
+// Copyright (c) 2021 Zagna https://github.com/Zagna & Nicholas Hayes https://github.com/0xC0000054
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -61,13 +61,14 @@ namespace OpenRasterFileType
 
 		private static readonly Dictionary<string, LayerBlendMode> SVGDict = BlendDict.ToDictionary(x => x.Value, x => x.Key);
 
-		public OraFileType() : base("OpenRaster", new FileTypeOptions()
-			{
-			SupportsLayers = true,
-			LoadExtensions = new string[] { ".ora" },
-			SaveExtensions = new string[] { ".ora" }
-			}
-		)
+		public OraFileType() : base("OpenRaster",
+			new FileTypeOptions()
+				{
+				SupportsLayers = true,
+				LoadExtensions = new string[] { ".ora" },
+				SaveExtensions = new string[] { ".ora" }
+				}
+			)
 			{
 			StrokeMapVersions = new string[2] { "mypaint_strokemap", "mypaint_strokemap_v2" };
 			}
@@ -104,7 +105,8 @@ namespace OpenRasterFileType
 							dst[1] = src[1]; // G
 							dst[2] = src[2]; // R
 
-							if (bpp == 4)
+							bool v = bpp == 4;
+							if (v)
 								{
 								dst[3] = src[3]; // A
 								}
@@ -205,23 +207,24 @@ namespace OpenRasterFileType
 							myLayer.Visible = getAttribute(LayerElement, "visibility", "visible") == "visible"; // newer ora files have this
 
 							string compop = getAttribute(LayerElement, "composite-op", "svg:src-over");
+
 							if (compop.Contains("pdn-"))
 								{
 								compop = compop.Replace("pdn-", "pdn:");
 								}
 
-							try
+							if (SVGDict.ContainsKey(compop))
 								{
 								myLayer.BlendMode = SVGDict[compop];
 								}
-							catch (KeyNotFoundException)
+							else
 								{
-								try
+								string pdn_compop = "pdn:" + compop.Split(':')[1];
+								if (SVGDict.ContainsKey(pdn_compop))
 									{
-									string[] compops = compop.Split(':');
-									myLayer.BlendMode = SVGDict["pdn:" + compops[1]];
+									myLayer.BlendMode = SVGDict[pdn_compop];
 									}
-								catch (KeyNotFoundException)
+								else
 									{
 									myLayer.BlendMode = LayerBlendMode.Normal;
 									}
@@ -557,11 +560,12 @@ namespace OpenRasterFileType
 
 					Writer.WriteAttributeString("x", info[i].x.ToString(CultureInfo.InvariantCulture));
 					Writer.WriteAttributeString("y", info[i].y.ToString(CultureInfo.InvariantCulture));
-					try
+
+					if (BlendDict.ContainsKey(layer.BlendMode))
 						{
 						Writer.WriteAttributeString("composite-op", BlendDict[layer.BlendMode]);
 						}
-					catch (KeyNotFoundException)
+					else
 						{
 						Writer.WriteAttributeString("composite-op", "svg:src-over");
 						}
@@ -598,9 +602,6 @@ namespace OpenRasterFileType
 
 	public class MyFileTypeFactory : IFileTypeFactory
 		{
-		public FileType[] GetFileTypeInstances()
-			{
-			return new FileType[] { new OraFileType() };
-			}
+		public FileType[] GetFileTypeInstances() => new FileType[] { new OraFileType() };
 		}
 	}
