@@ -348,7 +348,7 @@ namespace OpenRasterFileType
 						{
 						for (int y = 0; y < Layer.Height; y++)
 							{
-							ColorBgra* row = Layer.Surface.GetRowAddress(y);
+							ColorBgra* row = Layer.Surface.GetRowPointer(y);
 							ColorBgra* pixel = row;
 
 							for (int x = 0; x < Layer.Width; x++)

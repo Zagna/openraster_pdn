@@ -1,6 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net5.0-windows;net48</TargetFrameworks>
+    <TargetFramework>net6.0-windows</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>OpenRasterFileType</RootNamespace>
     <AssemblyName>OpenRasterFileType</AssemblyName>
@@ -15,18 +16,21 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <ApplicationVersion>1.%2a</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <PropertyGroup>
     <AssemblyOriginatorKeyFile>openraster-filetype.pfx</AssemblyOriginatorKeyFile>
+    <Authors>Jarno Ruokamo</Authors>
+    <Version>2022.2.13</Version>
+    <AssemblyVersion>2022.2.13</AssemblyVersion>
+    <FileVersion>2022.2.13</FileVersion>
+    <Description>OpenRaster plugin for paint.net</Description>
   </PropertyGroup>
-  <PropertyGroup/>
   <ItemGroup>
+    <SupportedPlatform Include="windows" />
     <Reference Include="PaintDotNet.Base">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Base.dll</HintPath>
@@ -43,17 +47,10 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Effects.dll</HintPath>
     </Reference>
-    <Reference Include="System.IO.Compression"/>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="openraster-filetype.pfx"/>
-    <Content Include="OraFileType.cs"/>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="System.Drawing.Common" Version="5.0.2"/>
-    <PackageReference Include="System.IO.Compression" Version="4.3.0"/>
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="bak\obj\Debug\.NETFramework,Version=v4.8.AssemblyAttributes.cs" />
+    <Reference Include="System.IO.Compression" />
+    <None Include="openraster-filetype.pfx" />
+    <Content Include="OraFileType.cs" />
+    <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+    <PackageReference Include="System.IO.Compression" Version="4.3.0" />
   </ItemGroup>
 </Project>
