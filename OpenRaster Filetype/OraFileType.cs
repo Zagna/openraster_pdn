@@ -341,9 +341,9 @@ namespace OpenRasterFileType
         {
             using Bitmap layer = new(baseWidth, baseHeight, PixelFormat.Format32bppArgb);
             using Bitmap bmp = new(inStream);
-            using Graphics graphics = Graphics.FromImage(bmp);
+            using Graphics graphics = Graphics.FromImage(layer);
 
-            graphics.DrawImage(layer, new Rectangle(xofs, yofs, bmp.Width, bmp.Height));
+            graphics.DrawImage(bmp, new Rectangle(xofs, yofs, bmp.Width, bmp.Height));
 
             return (Bitmap)layer.Clone();
         }
