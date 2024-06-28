@@ -34,14 +34,14 @@ using System.Xml;
 
 namespace OpenRasterFileType
 {
-	public class OraFileType : FileType
+    public class OraFileType : FileType
     {
-		private const int thumbMaxSize = 256;
+        private const int thumbMaxSize = 256;
 
-		// Base64 encoded .zip file containing just an uncompressed file called mimetype for OpenRaster.
-		private readonly string mimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
+        // Base64 encoded .zip file containing just an uncompressed file called mimetype for OpenRaster.
+        private readonly string mimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
 
-		private static readonly Dictionary<LayerBlendMode, string> blendDict = new()
+        private static readonly Dictionary<LayerBlendMode, string> blendDict = new()
         {
             { LayerBlendMode.Additive, "svg:plus" },
             { LayerBlendMode.ColorBurn, "svg:color-burn" },
@@ -59,23 +59,23 @@ namespace OpenRasterFileType
             { LayerBlendMode.Xor, "svg:xor" },
         };
 
-		private static readonly Dictionary<string, LayerBlendMode> SVGDict = blendDict.ToDictionary(x => x.Value, x => x.Key);
+        private static readonly Dictionary<string, LayerBlendMode> SVGDict = blendDict.ToDictionary(x => x.Value, x => x.Key);
 
-		public OraFileType() : base("OpenRaster",
-			new FileTypeOptions()
-				{
-				SupportsLayers = true,
-				LoadExtensions = new string[] { ".ora" },
-				SaveExtensions = new string[] { ".ora" }
-				}
-			)
-			{
-			strokeMapVersions = new string[2] { "mypaint_strokemap", "mypaint_strokemap_v2" };
-			}
+        public OraFileType() : base("OpenRaster",
+            new FileTypeOptions()
+                {
+                SupportsLayers = true,
+                LoadExtensions = new string[] { ".ora" },
+                SaveExtensions = new string[] { ".ora" }
+                }
+            )
+            {
+            strokeMapVersions = new string[2] { "mypaint_strokemap", "mypaint_strokemap_v2" };
+            }
 
-		private readonly string[] strokeMapVersions;
+        private readonly string[] strokeMapVersions;
 
-		protected override Document OnLoad(Stream input)
+        protected override Document OnLoad(Stream input)
         {
             using ZipArchive file = new(input, ZipArchiveMode.Read);
             try
@@ -184,14 +184,14 @@ namespace OpenRasterFileType
             return doc;
         }
 
-		protected override void OnSave(Document input, Stream output, SaveConfigToken token, Surface scratchSurface, ProgressEventHandler callback)
+        protected override void OnSave(Document input, Stream output, SaveConfigToken token, Surface scratchSurface, ProgressEventHandler callback)
         {
             ArgumentNullException.ThrowIfNull(input);
             ArgumentNullException.ThrowIfNull(output);
 
             byte[] zipBytes = Convert.FromBase64String(mimeTypeZip);
 
-			output.Write(zipBytes, 0, zipBytes.Length);
+            output.Write(zipBytes, 0, zipBytes.Length);
 
             using ZipArchive archive = new(output, ZipArchiveMode.Update, true);
 
@@ -325,15 +325,15 @@ namespace OpenRasterFileType
         }
 
         // A struct to store the new x,y offsets
-		private struct LayerInfo
+        private struct LayerInfo
         {
-			public int x;
-			public int y;
+            public int x;
+            public int y;
 
-			public LayerInfo(int x, int y)
+            public LayerInfo(int x, int y)
             {
-				this.x = x;
-				this.y = y;
+                this.x = x;
+                this.y = y;
             }
         }
 
@@ -348,7 +348,7 @@ namespace OpenRasterFileType
             return (Bitmap)layer.Clone();
         }
 
-		private static byte[] GetLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) // OraFormat.cs - some changes
+        private static byte[] GetLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) // OraFormat.cs - some changes
         {
             using MemoryStream xmlStream = new();
 
@@ -427,19 +427,19 @@ namespace OpenRasterFileType
             return xmlStream.ToArray();
         }
 
-		private static Size GetThumbDimensions(int width, int height) // OraFormat.cs
+        private static Size GetThumbDimensions(int width, int height) // OraFormat.cs
         {
-			return width <= thumbMaxSize && height <= thumbMaxSize
-				? new Size(width, height)
-				: width > height
-				? new Size(thumbMaxSize, (int)((double)height / width * thumbMaxSize))
-				: new Size((int)((double)width / height * thumbMaxSize), thumbMaxSize);
+            return width <= thumbMaxSize && height <= thumbMaxSize
+                ? new Size(width, height)
+                : width > height
+                ? new Size(thumbMaxSize, (int)((double)height / width * thumbMaxSize))
+                : new Size((int)((double)width / height * thumbMaxSize), thumbMaxSize);
         }
 
-		private static string GetAttribute(XmlElement element, string attribute, string defValue) // OraFormat.cs
+        private static string GetAttribute(XmlElement element, string attribute, string defValue) // OraFormat.cs
         {
-			string ret = element.GetAttribute(attribute);
-			return string.IsNullOrEmpty(ret) ? defValue : ret;
+            string ret = element.GetAttribute(attribute);
+            return string.IsNullOrEmpty(ret) ? defValue : ret;
         }
 
         private static string ToBase64(ZipArchiveEntry zipEntry)
@@ -452,8 +452,8 @@ namespace OpenRasterFileType
         }
     }
 
-	public class MyFileTypeFactory : IFileTypeFactory
+    public class MyFileTypeFactory : IFileTypeFactory
     {
-		public FileType[] GetFileTypeInstances() => new FileType[] { new OraFileType() };
+        public FileType[] GetFileTypeInstances() => new FileType[] { new OraFileType() };
     }
 }
