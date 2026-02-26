@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>OpenRasterFileType</RootNamespace>
     <AssemblyName>OpenRasterFileType</AssemblyName>
@@ -22,11 +22,11 @@
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyOriginatorKeyFile>openraster-filetype.pfx</AssemblyOriginatorKeyFile>
+    <DebugType>portable</DebugType>
     <Authors>Jarno Ruokamo</Authors>
-    <Version>2025.11.16</Version>
-    <AssemblyVersion>2025.11.16</AssemblyVersion>
-    <FileVersion>2025.11.16</FileVersion>
+    <Version>2026.01.10</Version>
+    <AssemblyVersion>2026.01.10</AssemblyVersion>
+    <FileVersion>2026.01.10</FileVersion>
     <Description>OpenRaster plugin for paint.net</Description>
   </PropertyGroup>
   <ItemGroup>
@@ -35,29 +35,43 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Base.dll</HintPath>
     </Reference>
-    <Reference Include="PaintDotNet.Core">
+    <Reference Include="PaintDotNet.Collections">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="PaintDotNet.Data">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Data.dll</HintPath>
-    </Reference>
-    <Reference Include="PaintDotNet.Effects">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Effects.dll</HintPath>
-    </Reference>
-    <Reference Include="PaintDotNet.Primitives">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Primitives.dll</HintPath>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Collections.dll</HintPath>
     </Reference>
     <Reference Include="PaintDotNet.ComponentModel">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\Program Files\Paint.NET\PaintDotNet.ComponentModel.dll</HintPath>
     </Reference>
-    <None Include="openraster-filetype.pfx" />
+    <Reference Include="PaintDotNet.Core">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="PaintDotNet.FileTypes">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.FileTypes.dll</HintPath>
+    </Reference>
+    <Reference Include="PaintDotNet.Fundamentals">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Fundamentals.dll</HintPath>
+    </Reference>
+    <Reference Include="PaintDotNet.Framework">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Framework.dll</HintPath>
+    </Reference>
+    <Reference Include="PaintDotNet.Primitives">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="PaintDotNet.Windows">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Windows.dll</HintPath>
+    </Reference>
+    <Reference Include="PaintDotNet.Windows.Core">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Windows.Core.dll</HintPath>
+    </Reference>
     <Content Include="OraFileType.cs" />
-    <PackageReference Include="System.Drawing.Common" Version="9.0.1" />
-    <PackageReference Include="System.IO.Compression" Version="4.3.0" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.1" />
   </ItemGroup>
 </Project>

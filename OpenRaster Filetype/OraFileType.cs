@@ -1,29 +1,10 @@
-﻿// paint.net OpenRaster Format Plugin
-// 
-// Copyright (c) 2021 Zagna https://github.com/Zagna & Nicholas Hayes https://github.com/0xC0000054
-// 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
-using PaintDotNet;
+﻿using PaintDotNet;
+using PaintDotNet.Drawing;
+using PaintDotNet.FileTypes;
+using PaintDotNet.Imaging;
+using PaintDotNet.Rendering;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
@@ -33,57 +14,63 @@ using System.Linq;
 using System.Xml;
 
 namespace OpenRasterFileType {
-    public class OraFileType : FileType {
-        private const int thumbMaxSize = 256;
 
-        // Base64 encoded .zip file containing just an uncompressed file called mimetype for OpenRaster.
-        private readonly string mimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
-
-        private static readonly Dictionary<LayerBlendMode, string> blendDict = new() {
+    internal static class Modes {
+        internal static readonly Dictionary<LayerBlendMode, string> PDN = new() {
+            { LayerBlendMode.Normal, "svg:src-over" },
+            { LayerBlendMode.Multiply, "svg:multiply" },
             { LayerBlendMode.Additive, "svg:plus" },
             { LayerBlendMode.ColorBurn, "svg:color-burn" },
             { LayerBlendMode.ColorDodge, "svg:color-dodge" },
-            { LayerBlendMode.Darken, "svg:darken" },
-            { LayerBlendMode.Difference, "svg:difference" },
-            { LayerBlendMode.Glow, "pdn:glow" },
-            { LayerBlendMode.Lighten, "svg:lighten" },
-            { LayerBlendMode.Multiply, "svg:multiply" },
-            { LayerBlendMode.Negation, "pdn:negation" },
-            { LayerBlendMode.Normal, "svg:src-over" },
-            { LayerBlendMode.Overlay, "svg:overlay" },
             { LayerBlendMode.Reflect, "pdn:reflect" },
+            { LayerBlendMode.Glow, "pdn:glow" },
+            { LayerBlendMode.Overlay, "svg:overlay" },
+            { LayerBlendMode.Difference, "svg:difference" },
+            { LayerBlendMode.Negation, "pdn:negation" },
+            { LayerBlendMode.Lighten, "svg:lighten" },
+            { LayerBlendMode.Darken, "svg:darken" },
             { LayerBlendMode.Screen, "svg:screen" },
             { LayerBlendMode.Xor, "svg:xor" },
         };
 
-        private static readonly Dictionary<string, LayerBlendMode> SVGDict = blendDict.ToDictionary(x => x.Value, x => x.Key);
+        internal static readonly Dictionary<string, LayerBlendMode> SVG = PDN.ToDictionary(x => x.Value, x => x.Key); 
+    }
 
-        public OraFileType() : base("OpenRaster",
-            new FileTypeOptions() {
-                SupportsLayers = true,
-                LoadExtensions = [".ora"],
-                SaveExtensions = [".ora"]
-            }
-        ){
-            strokeMapVersions = ["mypaint_strokemap", "mypaint_strokemap_v2"];
+    public class OraFileType(IFileTypeHost host) : FileType(host, "OpenRaster", FileTypeOptions.Create() with {
+            LoadExtensions = [".ora"],
+            SaveExtensions = [".ora"],
+            SupportsSavingLayers = true
+        }) {
+        protected override IFileTypeLoader OnCreateLoader()
+        {
+            return new Loader(this);
         }
 
-        private readonly string[] strokeMapVersions;
+        protected override IFileTypeSaver OnCreateSaver()
+        {
+            return new Saver(this);
+        }
+    }
 
-        protected override Document OnLoad(Stream input) {
-            using ZipArchive file = new(input, ZipArchiveMode.Read);
+    internal class Loader : FileTypeLoader {
+
+        public Loader(OraFileType fileType) : base(fileType)
+        {
+        }
+
+        protected override IFileTypeDocument OnLoad(IFileTypeLoadContext context) {
+            using ZipArchive file = new(context.Input, ZipArchiveMode.Read);
             try {
-                ZipArchiveEntry mimeEntry = file.GetEntry("mimetype");
-                using StreamReader reader = new(mimeEntry.Open());
-                string mimeType = reader.ReadToEnd();
-                if (!mimeType.Equals("image/openraster", StringComparison.Ordinal)) {
-                    throw new FormatException("Incorrect mimetype: " + mimeType);
+                using StreamReader reader = new(file.GetEntry("mimetype").Open());
+                if (!reader.ReadToEnd().Equals("image/openraster", StringComparison.Ordinal)) {
+                    throw new FormatException("Incorrect mimetype: " + reader.ReadToEnd());
                 }
             }
             catch (NullReferenceException) {
                 throw new FormatException("No mimetype found in OpenRaster file");
             }
 
+            IImagingFactory imagingFactory = Services.GetService<IImagingFactory>();
             XmlDocument stackXml = new();
             try {
                 stackXml.Load(file.GetEntry("stack.xml").Open());
@@ -96,11 +83,12 @@ namespace OpenRasterFileType {
             int width = int.Parse(imageElement.GetAttribute("w"), CultureInfo.InvariantCulture);
             int height = int.Parse(imageElement.GetAttribute("h"), CultureInfo.InvariantCulture);
 
-            Document doc = new(width, height) {
-                DpuUnit = MeasurementUnit.Inch,
-                DpuX = double.Parse(GetAttribute(imageElement, "xres", "72"), CultureInfo.InvariantCulture),
-                DpuY = double.Parse(GetAttribute(imageElement, "yres", "72"), CultureInfo.InvariantCulture)
-            };
+            IFileTypeDocument document = context.Factory.CreateDocument(new(width, height), PixelFormats.Bgra32);
+            document.Resolution = new(
+                double.Parse(GetAttribute(imageElement, "xres", "72"), CultureInfo.InvariantCulture), 
+                double.Parse(GetAttribute(imageElement, "yres", "72"), CultureInfo.InvariantCulture), 
+                MeasurementUnit.Inch
+            );
 
             XmlElement stackElement = (XmlElement)stackXml.GetElementsByTagName("stack")[0];
             XmlNodeList layerElements = stackElement.GetElementsByTagName("layer");
@@ -113,82 +101,104 @@ namespace OpenRasterFileType {
 
             for (int i = layerCount; i >= 0; i--) { // The last layer in the list is the background so load in reverse
                 XmlElement layerElement = (XmlElement)layerElements[i];
-                int x = int.Parse(GetAttribute(layerElement, "x", "0"), CultureInfo.InvariantCulture); // the x offset within the layer
-                int y = int.Parse(GetAttribute(layerElement, "y", "0"), CultureInfo.InvariantCulture); // the y offset within the layer
+                int x = int.Parse(GetAttribute(layerElement, "x", "0"), CultureInfo.InvariantCulture);
+                int y = int.Parse(GetAttribute(layerElement, "y", "0"), CultureInfo.InvariantCulture);
+
+                Point2Int32 offset = new(x, y);
+
+                using MemoryStream layerStream = new();
+                try {
+                    file.GetEntry(layerElement.GetAttribute("src")).Open().CopyTo(layerStream); 
+                }
+                catch (IOException) {
+                    throw new FormatException("Missing layer file");
+                }
+
+                using IBitmapDecoder decoder = imagingFactory.CreateDecoderFromStream(layerStream);
+                using IFileTypeBitmapLayer bitmapLayer = document.CreateBitmapLayer();
+                IBitmapSource decoded = imagingFactory.CreateFormatConvertedBitmap(decoder.Frames[0], bitmapLayer.PixelFormat);
+
+                SizeInt32 newSize = decoded.Size;
+                if (offset.X + decoded.Size.Width > bitmapLayer.Size.Width) {
+                    newSize.Width = bitmapLayer.Size.Width - offset.X;
+                }
+                if (offset.Y + decoded.Size.Height > bitmapLayer.Size.Height) {
+                    newSize.Height = bitmapLayer.Size.Height - offset.Y;
+                }
+
+                if (decoded.Size != newSize) {
+                    decoded = imagingFactory.CreateBitmapClipper(decoded, new(Point2Int32.Zero, newSize));
+                }
+
+                bitmapLayer.GetBitmap().WriteSource(offset, decoded);
 
                 int layerNum = layerCount - i;
-
-                ZipArchiveEntry layerEntry = file.GetEntry(layerElement.GetAttribute("src"));
-
-                using Stream s = layerEntry.Open();
-                using Bitmap BMP = GetBitmapFromOraLayer(x, y, s, width, height);
-
-                BitmapLayer myLayer = i == layerCount ? Layer.CreateBackgroundLayer(width, height) : new(width, height);
-
-                myLayer.Surface.CopyFromGdipBitmap(BMP, false);
-
-                myLayer.Name = GetAttribute(layerElement, "name", $"Layer {layerNum}");
-                myLayer.Opacity = (byte)(255.0 * double.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture));
-                myLayer.Visible = GetAttribute(layerElement, "visibility", "visible") == "visible"; // newer ora files have this
+                bitmapLayer.Name = GetAttribute(layerElement, "name", $"Layer {layerNum}");
+                bitmapLayer.Opacity = (byte)(255.0 * double.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture));
+                bitmapLayer.Visible = GetAttribute(layerElement, "visibility", "visible") == "visible";
 
                 string compOp = GetAttribute(layerElement, "composite-op", "svg:src-over");
 
                 compOp = compOp.Contains("pdn-") ? compOp.Replace("pdn-", "pdn:") : compOp;
 
-                if (SVGDict.TryGetValue(compOp, out LayerBlendMode value)) {
-                    myLayer.BlendMode = value;
+                if (Modes.SVG.TryGetValue(compOp, out LayerBlendMode value)) {
+                    bitmapLayer.BlendMode = value;
                 }
                 else {
                     string pdnCompOp = "pdn:" + compOp.Split(':')[1];
-                    myLayer.BlendMode = SVGDict.TryGetValue(pdnCompOp, out LayerBlendMode pdnValue) ? pdnValue : LayerBlendMode.Normal;
+                    bitmapLayer.BlendMode = Modes.SVG.TryGetValue(pdnCompOp, out LayerBlendMode pdnValue) ? pdnValue : LayerBlendMode.Normal;
                 }
 
-                string backTile = GetAttribute(layerElement, "background_tile", string.Empty);
-
-                if (!string.IsNullOrEmpty(backTile)) {
-                    // convert the tile image to a Base64String and then save it in the layer's MetaData.
-                    myLayer.Metadata.SetUserValue("OraBackgroundTile", ToBase64(file.GetEntry(backTile)));
-                }
-
-                foreach (string version in strokeMapVersions) {
-                    string strokeMap = GetAttribute(layerElement, version, string.Empty);
-
-                    if (!string.IsNullOrEmpty(strokeMap)) {
-                        // convert the stroke map to a Base64String and then save it in the layer's MetaData.
-                        myLayer.Metadata.SetUserValue("OraMyPaintStrokeMapData", ToBase64(file.GetEntry(strokeMap)));
-                        // Save the version of the stroke map in the MetaData
-                        myLayer.Metadata.SetUserValue("OraMyPaintStrokeMapVersion", version);
-                    }
-                }
-                doc.Layers.Insert(layerNum, myLayer);
+                document.Layers.Insert(layerNum, bitmapLayer);
             }
-            return doc;
+            return document;
         }
 
-        protected override void OnSave(Document input, Stream output, SaveConfigToken token, Surface scratchSurface, ProgressEventHandler callback) {
-            ArgumentNullException.ThrowIfNull(input);
-            ArgumentNullException.ThrowIfNull(output);
+        private static string GetAttribute(XmlElement element, string attribute, string defValue) {
+            return string.IsNullOrEmpty(element.GetAttribute(attribute)) ? defValue : element.GetAttribute(attribute);
+        }
+    }
+
+    internal class Saver : FileTypeSaver {
+
+        private readonly OraFileType fileType;
+
+        private const int thumbMaxSize = 256;
+
+        private readonly string mimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
+
+        public Saver(OraFileType fileType) : base(fileType)
+        {
+            this.fileType = fileType;
+        }
+
+        protected override void OnSave(IFileTypeSaveContext context) {
+            ArgumentNullException.ThrowIfNull(context.Document);
+            ArgumentNullException.ThrowIfNull(context.Output);
 
             byte[] zipBytes = Convert.FromBase64String(mimeTypeZip);
 
-            output.Write(zipBytes, 0, zipBytes.Length);
+            context.Output.Write(zipBytes);
 
-            using ZipArchive archive = new(output, ZipArchiveMode.Update, true);
+            using ZipArchive archive = new(context.Output, ZipArchiveMode.Update, true);
 
-            LayerInfo[] layerInfo = new LayerInfo[input.Layers.Count];
+            Point[] layerInfo = new Point[context.Document.Layers.Count];
 
-            for (int i = 0; i < input.Layers.Count; i++) {
-                BitmapLayer layer = (BitmapLayer)input.Layers[i];
-                Rectangle bounds = layer.Surface.Bounds;
-                ColorBgra pixel;
+            using IFileTypeCompositeBitmap<ColorBgra32> compositeBitmap = context.Document.GetCompositeBitmap<ColorBgra32>();
 
-                int left = layer.Width;
-                int top = layer.Height;
+            foreach (var (layer, i) in context.Document.Layers.Select((value, i) => ( value, i ))) {
+                RectInt32 bounds = compositeBitmap.Bounds();
+                Color pixel;
+
+                Bitmap layerBitMap = layer.GetBitmap().ToGdipBitmap();
+
+                int left = layer.Size.Width;
+                int top = layer.Size.Height;
                 int right = 0;
                 int bottom = 0;
-                for (int y = 0; y < layer.Height; y++) {
-                    for (int x = 0; x < layer.Width; x++) {
-                        pixel = layer.Surface[x, y];
+                for (int y = 0; y < layer.Size.Height; y++) {
+                    for (int x = 0; x < layer.Size.Width; x++) {
+                        pixel = layerBitMap.GetPixel(x, y);
                         if (pixel.A > 0) {
                             left = x < left ? x : left;
                             right = x > right ? x : right;
@@ -198,119 +208,40 @@ namespace OpenRasterFileType {
                     }
                 }
 
-                if (left < layer.Width && top < layer.Height) { // is the layer not empty
+                if (left < layer.Size.Width && top < layer.Size.Height) { // is the layer not empty
                     bounds = new Rectangle(left, top, right - left + 1, bottom - top + 1); // clip it to the visible rectangle
-                    layerInfo[i] = new LayerInfo(left, top);
+                    layerInfo[i] = new Point(left, top);
                 }
                 else {
-                    layerInfo[i] = new LayerInfo(0, 0);
-                }
-
-                string tileData = layer.Metadata.GetUserValue("OraBackgroundTile");
-
-                if (!string.IsNullOrEmpty(tileData)) { // save the background_tile png if it exists
-                    ZipArchiveEntry bgTile = archive.CreateEntry("data/background_tile.png");
-
-                    using Stream bg = bgTile.Open();
-                    byte[] tileBytes = Convert.FromBase64String(tileData);
-                    bg.Write(tileBytes, 0, tileBytes.Length);
-                }
-
-                string strokeData = layer.Metadata.GetUserValue("OraMyPaintStrokeMapData");
-
-                if (!string.IsNullOrEmpty(strokeData)) { // save MyPaint's stroke data if it exists
-                    ZipArchiveEntry strokeMap = archive.CreateEntry("data/layer" + i.ToString(CultureInfo.InvariantCulture) + "_strokemap.dat");
-
-                    using Stream stroke = strokeMap.Open();
-                    byte[] strokeBytes = Convert.FromBase64String(strokeData);
-                    stroke.Write(strokeBytes, 0, strokeBytes.Length);
+                    layerInfo[i] = new Point(0, 0);
                 }
 
                 using MemoryStream layerStream = new();
-                layer.Surface.CreateAliasedBitmap(bounds, true).Save(layerStream, ImageFormat.Png);
-                byte[] layerBuf = layerStream.ToArray();
+                layerBitMap.Clone(bounds, layerBitMap.PixelFormat).Save(layerStream, ImageFormat.Png);
 
-                ZipArchiveEntry layerPNG = archive.CreateEntry("data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png");
-
-                using Stream pngStream = layerPNG.Open();
-                pngStream.Write(layerBuf, 0, layerBuf.Length);
+                using Stream pngStream = archive.CreateEntry("data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png").Open();
+                pngStream.Write(layerStream.ToArray());
             }
 
-            ZipArchiveEntry stackXML = archive.CreateEntry("stack.xml");
-
-            using (Stream sXML = stackXML.Open()) {
-                double dpiX;
-                double dpiY;
-
-                switch (input.DpuUnit) {
-                    case MeasurementUnit.Centimeter:
-                        dpiX = Document.DotsPerCmToDotsPerInch(input.DpuX);
-                        dpiY = Document.DotsPerCmToDotsPerInch(input.DpuY);
-                        break;
-
-                    case MeasurementUnit.Inch:
-                        dpiX = input.DpuX;
-                        dpiY = input.DpuY;
-                        break;
-
-                    case MeasurementUnit.Pixel:
-                        dpiX = Document.GetDefaultDpu(MeasurementUnit.Inch);
-                        dpiY = Document.GetDefaultDpu(MeasurementUnit.Inch);
-                        break;
-
-                    default:
-                        throw new InvalidEnumArgumentException("Invalid measurement unit.");
-                }
-
-                byte[] stackBytes = GetLayerXmlData(input.Layers, layerInfo, dpiX, dpiY);
-                sXML.Write(stackBytes, 0, stackBytes.Length);
+            using (Stream sXML = archive.CreateEntry("stack.xml").Open()) {
+                byte[] stackBytes = GetLayerXmlData(context.Document.Layers, layerInfo, context.Document.Resolution);
+                sXML.Write(stackBytes);
             }
-
-            using Surface flat = new(input.Width, input.Height);
-
-            input.Flatten(flat);
 
             using MemoryStream aliasStream = new();
-            flat.CreateAliasedBitmap().Save(aliasStream, ImageFormat.Png);
-            byte[] aliasBytes = aliasStream.ToArray();
+            compositeBitmap.ToGdipBitmap().Save(aliasStream, ImageFormat.Png);
 
-            ZipArchiveEntry mergeEntry = archive.CreateEntry("mergedimage.png");
-
-            using Stream merge = mergeEntry.Open();
-            merge.Write(aliasBytes, 0, aliasBytes.Length);
-
-            Size thumbSize = GetThumbDimensions(input.Width, input.Height);
-
-            using Surface scale = new(thumbSize);
-            scale.FitSurface(ResamplingAlgorithm.SuperSampling, flat);
+            using Stream merge = archive.CreateEntry("mergedimage.png").Open();
+            merge.Write(aliasStream.ToArray());
 
             using MemoryStream scaleStream = new();
-            scale.CreateAliasedBitmap().Save(scaleStream, ImageFormat.Png);
+            new Bitmap(compositeBitmap.ToGdipBitmap(), GetThumbDimensions(context.Document.Size.Width, context.Document.Size.Height)).Save(scaleStream, ImageFormat.Png);
 
-            byte[] scaleBytes = scaleStream.ToArray();
-
-            ZipArchiveEntry thumbnailEntry = archive.CreateEntry("Thumbnails/thumbnail.png");
-            using Stream thumbStream = thumbnailEntry.Open();
-            thumbStream.Write(scaleBytes, 0, scaleBytes.Length);
+            using Stream thumbStream = archive.CreateEntry("Thumbnails/thumbnail.png").Open();
+            thumbStream.Write(scaleStream.ToArray());
         }
 
-        // A struct to store the new x,y offsets
-        private struct LayerInfo(int x, int y) {
-            public int x = x;
-            public int y = y;
-        }
-
-        private static Bitmap GetBitmapFromOraLayer(int xofs, int yofs, Stream inStream, int baseWidth, int baseHeight) {
-            using Bitmap layer = new(baseWidth, baseHeight, PixelFormat.Format32bppArgb);
-            using Bitmap bmp = new(inStream);
-            using Graphics graphics = Graphics.FromImage(layer);
-
-            graphics.DrawImage(bmp, new Rectangle(xofs, yofs, bmp.Width, bmp.Height));
-
-            return (Bitmap)layer.Clone();
-        }
-
-        private static byte[] GetLayerXmlData(LayerList layers, LayerInfo[] info, double dpiX, double dpiY) { // OraFormat.cs - some changes
+        private static byte[] GetLayerXmlData(IReadOnlyFileTypeLayerList layers, Point[] info, Resolution resolution) {
             using MemoryStream xmlStream = new();
 
             XmlWriterSettings settings = new() {
@@ -324,12 +255,12 @@ namespace OpenRasterFileType {
             writer.WriteStartDocument();
 
             writer.WriteStartElement("image");
-            writer.WriteAttributeString("w", layers.GetAt(0).Width.ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("h", layers.GetAt(0).Height.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("w", layers[0].Size.Width.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("h", layers[0].Size.Height.ToString(CultureInfo.InvariantCulture));
             writer.WriteAttributeString("version", "0.0.5"); // mandatory
 
-            writer.WriteAttributeString("xres", dpiX.ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("yres", dpiY.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("xres", resolution.X.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("yres", resolution.Y.ToString(CultureInfo.InvariantCulture));
 
             writer.WriteStartElement("stack");
             writer.WriteAttributeString("name", "root");
@@ -338,29 +269,15 @@ namespace OpenRasterFileType {
             for (int i = layers.Count - 1; i >= 0; i--) {
                 writer.WriteStartElement("layer");
 
-                string backTile = layers[i].Metadata.GetUserValue("OraBackgroundTile");
-
-                if (!string.IsNullOrEmpty(backTile)) {
-                    writer.WriteAttributeString("background_tile", "data/background_tile.png");
-                }
-                string strokeMapVersion = layers[i].Metadata.GetUserValue("OraMyPaintStrokeMapVersion");
-
-                if (!string.IsNullOrEmpty(strokeMapVersion)) {
-                    writer.WriteAttributeString(strokeMapVersion, "data/layer" + i.ToString(CultureInfo.InvariantCulture) + "_strokemap.dat");
-                }
-                if (string.IsNullOrEmpty(strokeMapVersion)) { // the stroke map layer does not have a name
-                    writer.WriteAttributeString("name", layers[i].Name);
-                }
-
-                writer.WriteAttributeString("opacity", double.Clamp(layers[i].Opacity / 255.0, 0.0, 1.0).ToString("N2", CultureInfo.InvariantCulture)); // this is even more bizarre :D
+                writer.WriteAttributeString("opacity", double.Clamp(layers[i].Opacity / 255.0, 0.0, 1.0).ToString("N2", CultureInfo.InvariantCulture));
 
                 writer.WriteAttributeString("src", "data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png");
                 writer.WriteAttributeString("visibility", layers[i].Visible ? "visible" : "hidden");
 
-                writer.WriteAttributeString("x", info[i].x.ToString(CultureInfo.InvariantCulture));
-                writer.WriteAttributeString("y", info[i].y.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("x", info[i].X.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("y", info[i].Y.ToString(CultureInfo.InvariantCulture));
 
-                if (blendDict.TryGetValue(layers[i].BlendMode, out string value)) {
+                if (Modes.PDN.TryGetValue(layers[i].BlendMode, out string value)) {
                     writer.WriteAttributeString("composite-op", value);
                 }
                 else {
@@ -386,20 +303,13 @@ namespace OpenRasterFileType {
                 ? new Size(thumbMaxSize, (int)((double)height / width * thumbMaxSize))
                 : new Size((int)((double)width / height * thumbMaxSize), thumbMaxSize);
         }
-
-        private static string GetAttribute(XmlElement element, string attribute, string defValue) {
-            return string.IsNullOrEmpty(element.GetAttribute(attribute)) ? defValue : element.GetAttribute(attribute);
-        }
-
-        private static string ToBase64(ZipArchiveEntry zipEntry) {
-            using Stream stream = zipEntry.Open();
-            using MemoryStream memory = new();
-            stream.CopyTo(memory);
-            return Convert.ToBase64String(memory.ToArray());
-        }
     }
 
-    public class MyFileTypeFactory : IFileTypeFactory {
-        public FileType[] GetFileTypeInstances() => [new OraFileType()];
+    public class OraFileTypeFactory : IFileTypeFactory
+    {
+        public IFileType[] CreateFileTypes(IFileTypeHost host)
+        {
+            return [new OraFileType(host)];
+        }
     }
 }
