@@ -213,7 +213,7 @@ namespace OpenRasterFileType {
                     layerInfo[i] = new Point(left, top);
                 }
                 else {
-                    layerInfo[i] = new Point(0, 0);
+                    layerInfo[i] = Point.Empty;
                 }
 
                 using MemoryStream layerStream = new();
