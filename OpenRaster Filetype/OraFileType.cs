@@ -186,7 +186,7 @@ namespace OpenRasterFileType {
 
             using IFileTypeCompositeBitmap<ColorBgra32> compositeBitmap = context.Document.GetCompositeBitmap<ColorBgra32>();
 
-            foreach (var (layer, i) in context.Document.Layers.Select((value, i) => ( value, i ))) {
+            foreach (var (layer, i) in context.Document.Layers.Select((value, i) => (value, i))) {
                 RectInt32 bounds = compositeBitmap.Bounds();
                 Color pixel;
 
@@ -223,10 +223,8 @@ namespace OpenRasterFileType {
                 pngStream.Write(layerStream.ToArray());
             }
 
-            using (Stream sXML = archive.CreateEntry("stack.xml").Open()) {
-                byte[] stackBytes = GetLayerXmlData(context.Document.Layers, layerInfo, context.Document.Resolution);
-                sXML.Write(stackBytes);
-            }
+            using Stream sXML = archive.CreateEntry("stack.xml").Open();
+            sXML.Write(GetLayerXmlData(context.Document.Layers, layerInfo, context.Document.Resolution));
 
             using MemoryStream aliasStream = new();
             compositeBitmap.ToGdipBitmap().Save(aliasStream, ImageFormat.Png);
