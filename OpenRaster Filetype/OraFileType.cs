@@ -267,6 +267,7 @@ namespace OpenRasterFileType {
             for (int i = layers.Count - 1; i >= 0; i--) {
                 writer.WriteStartElement("layer");
 
+                writer.WriteAttributeString("name", layers[i].Name);
                 writer.WriteAttributeString("opacity", layers[i].Opacity.ToString(CultureInfo.InvariantCulture));
 
                 writer.WriteAttributeString("src", "data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png");
