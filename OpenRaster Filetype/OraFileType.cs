@@ -134,7 +134,7 @@ namespace OpenRasterFileType {
 
                 int layerNum = layerCount - i;
                 bitmapLayer.Name = GetAttribute(layerElement, "name", $"Layer {layerNum}");
-                bitmapLayer.Opacity = (byte)(255.0 * double.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture));
+                bitmapLayer.Opacity = float.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture);
                 bitmapLayer.Visible = GetAttribute(layerElement, "visibility", "visible") == "visible";
 
                 string compOp = GetAttribute(layerElement, "composite-op", "svg:src-over");
@@ -267,7 +267,7 @@ namespace OpenRasterFileType {
             for (int i = layers.Count - 1; i >= 0; i--) {
                 writer.WriteStartElement("layer");
 
-                writer.WriteAttributeString("opacity", double.Clamp(layers[i].Opacity / 255.0, 0.0, 1.0).ToString("N2", CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("opacity", layers[i].Opacity.ToString(CultureInfo.InvariantCulture));
 
                 writer.WriteAttributeString("src", "data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png");
                 writer.WriteAttributeString("visibility", layers[i].Visible ? "visible" : "hidden");
