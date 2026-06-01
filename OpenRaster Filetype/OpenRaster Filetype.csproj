@@ -28,6 +28,7 @@
     <AssemblyVersion>2026.01.10</AssemblyVersion>
     <FileVersion>2026.01.10</FileVersion>
     <Description>OpenRaster plugin for paint.net</Description>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
     <SupportedPlatform Include="windows" />
@@ -72,6 +73,5 @@
       <HintPath>C:\Program Files\Paint.NET\PaintDotNet.Windows.Core.dll</HintPath>
     </Reference>
     <Content Include="OraFileType.cs" />
-    <PackageReference Include="System.Drawing.Common" Version="10.0.1" />
   </ItemGroup>
 </Project>

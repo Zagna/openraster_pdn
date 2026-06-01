@@ -41,23 +41,16 @@ namespace OpenRasterFileType {
             SaveExtensions = [".ora"],
             SupportsSavingLayers = true
         }) {
-        protected override IFileTypeLoader OnCreateLoader()
-        {
+        protected override IFileTypeLoader OnCreateLoader() {
             return new Loader(this);
         }
 
-        protected override IFileTypeSaver OnCreateSaver()
-        {
+        protected override IFileTypeSaver OnCreateSaver() {
             return new Saver(this);
         }
     }
 
-    internal class Loader : FileTypeLoader {
-
-        public Loader(OraFileType fileType) : base(fileType)
-        {
-        }
-
+    internal class Loader(OraFileType fileType) : FileTypeLoader(fileType) {
         protected override IFileTypeDocument OnLoad(IFileTypeLoadContext context) {
             using ZipArchive file = new(context.Input, ZipArchiveMode.Read);
             try {
@@ -69,14 +62,16 @@ namespace OpenRasterFileType {
             catch (NullReferenceException) {
                 throw new FormatException("No mimetype found in OpenRaster file");
             }
-
-            IImagingFactory imagingFactory = Services.GetService<IImagingFactory>();
+            
             XmlDocument stackXml = new();
             try {
                 stackXml.Load(file.GetEntry("stack.xml").Open());
             }
             catch (NullReferenceException) {
                 throw new FormatException("No 'stack.xml' found in OpenRaster file");
+            }
+            catch (XmlException) {
+                throw new FormatException("Invalid XML file");
             }
 
             XmlElement imageElement = stackXml.DocumentElement;
@@ -97,7 +92,10 @@ namespace OpenRasterFileType {
                 throw new FormatException("No layers found in OpenRaster file");
             }
 
+            IFileTypePropertyBag metadata = context.MetadataForSaveOptions;
+
             int layerCount = layerElements.Count - 1;
+            IImagingFactory imagingFactory = Services.GetService<IImagingFactory>();
 
             for (int i = layerCount; i >= 0; i--) { // The last layer in the list is the background so load in reverse
                 XmlElement layerElement = (XmlElement)layerElements[i];
@@ -137,8 +135,13 @@ namespace OpenRasterFileType {
                 bitmapLayer.Opacity = float.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture);
                 bitmapLayer.Visible = GetAttribute(layerElement, "visibility", "visible") == "visible";
 
-                string compOp = GetAttribute(layerElement, "composite-op", "svg:src-over");
+                XmlElement parentElement = (XmlElement)layerElement.ParentNode;
+                float parentOpacity = float.Parse(GetAttribute(parentElement, "opacity", "1"), CultureInfo.InvariantCulture);
+                if (parentOpacity != 1 && parentOpacity != bitmapLayer.Opacity) bitmapLayer.Opacity = parentOpacity;
+                bool parentVisible =  GetAttribute(parentElement, "visibility", "visible") == "visible";
+                if (!parentVisible && parentVisible != bitmapLayer.Visible) bitmapLayer.Visible = parentVisible;
 
+                string compOp = GetAttribute(layerElement, "composite-op", "svg:src-over");
                 compOp = compOp.Contains("pdn-") ? compOp.Replace("pdn-", "pdn:") : compOp;
 
                 if (Modes.SVG.TryGetValue(compOp, out LayerBlendMode value)) {
@@ -155,22 +158,17 @@ namespace OpenRasterFileType {
         }
 
         private static string GetAttribute(XmlElement element, string attribute, string defValue) {
-            return string.IsNullOrEmpty(element.GetAttribute(attribute)) ? defValue : element.GetAttribute(attribute);
+            return element.HasAttribute(attribute) ? element.GetAttribute(attribute) : defValue;
         }
     }
 
-    internal class Saver : FileTypeSaver {
+    internal class Saver(OraFileType fileType) : FileTypeSaver(fileType) {
 
-        private readonly OraFileType fileType;
+        private readonly OraFileType fileType = fileType;
 
         private const int thumbMaxSize = 256;
 
         private readonly string mimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
-
-        public Saver(OraFileType fileType) : base(fileType)
-        {
-            this.fileType = fileType;
-        }
 
         protected override void OnSave(IFileTypeSaveContext context) {
             ArgumentNullException.ThrowIfNull(context.Document);
@@ -255,7 +253,7 @@ namespace OpenRasterFileType {
             writer.WriteStartElement("image");
             writer.WriteAttributeString("w", layers[0].Size.Width.ToString(CultureInfo.InvariantCulture));
             writer.WriteAttributeString("h", layers[0].Size.Height.ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("version", "0.0.5"); // mandatory
+            writer.WriteAttributeString("version", "0.0.3"); // mandatory
 
             writer.WriteAttributeString("xres", resolution.X.ToString(CultureInfo.InvariantCulture));
             writer.WriteAttributeString("yres", resolution.Y.ToString(CultureInfo.InvariantCulture));
@@ -306,8 +304,7 @@ namespace OpenRasterFileType {
 
     public class OraFileTypeFactory : IFileTypeFactory
     {
-        public IFileType[] CreateFileTypes(IFileTypeHost host)
-        {
+        public IFileType[] CreateFileTypes(IFileTypeHost host) {
             return [new OraFileType(host)];
         }
     }
