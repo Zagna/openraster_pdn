@@ -92,7 +92,7 @@ namespace OpenRasterFileType {
                 throw new FormatException("No layers found in OpenRaster file");
             }
 
-            IFileTypePropertyBag metadata = context.MetadataForSaveOptions;
+            // IFileTypePropertyBag metadata = context.MetadataForSaveOptions;
 
             int layerCount = layerElements.Count - 1;
             IImagingFactory imagingFactory = Services.GetService<IImagingFactory>();
@@ -214,27 +214,18 @@ namespace OpenRasterFileType {
                     layerInfo[i] = Point.Empty;
                 }
 
-                using MemoryStream layerStream = new();
-                layerBitMap.Clone(bounds, layerBitMap.PixelFormat).Save(layerStream, ImageFormat.Png);
-
                 using Stream pngStream = archive.CreateEntry("data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png").Open();
-                pngStream.Write(layerStream.ToArray());
+                layerBitMap.Clone(bounds, layerBitMap.PixelFormat).Save(pngStream, ImageFormat.Png);
             }
 
             using Stream sXML = archive.CreateEntry("stack.xml").Open();
             sXML.Write(GetLayerXmlData(context.Document.Layers, layerInfo, context.Document.Resolution));
 
-            using MemoryStream aliasStream = new();
-            compositeBitmap.ToGdipBitmap().Save(aliasStream, ImageFormat.Png);
-
             using Stream merge = archive.CreateEntry("mergedimage.png").Open();
-            merge.Write(aliasStream.ToArray());
-
-            using MemoryStream scaleStream = new();
-            new Bitmap(compositeBitmap.ToGdipBitmap(), GetThumbDimensions(context.Document.Size.Width, context.Document.Size.Height)).Save(scaleStream, ImageFormat.Png);
+            compositeBitmap.ToGdipBitmap().Save(merge, ImageFormat.Png);
 
             using Stream thumbStream = archive.CreateEntry("Thumbnails/thumbnail.png").Open();
-            thumbStream.Write(scaleStream.ToArray());
+            new Bitmap(compositeBitmap.ToGdipBitmap(), GetThumbDimensions(context.Document.Size.Width, context.Document.Size.Height)).Save(thumbStream, ImageFormat.Png);
         }
 
         private static byte[] GetLayerXmlData(IReadOnlyFileTypeLayerList layers, Point[] info, Resolution resolution) {
