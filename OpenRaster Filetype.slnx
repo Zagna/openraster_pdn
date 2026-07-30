@@ -1,8 +1,6 @@
 <Solution>
   <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="x64" />
-    <Platform Name="x86" />
+    <Platform Name="AnyCPU" />
   </Configurations>
   <Project Path="OpenRaster Filetype.csproj" />
 </Solution>

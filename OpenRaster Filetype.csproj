@@ -24,9 +24,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DebugType>portable</DebugType>
     <Authors>Jarno Ruokamo</Authors>
-    <Version>2026.01.10</Version>
-    <AssemblyVersion>2026.01.10</AssemblyVersion>
-    <FileVersion>2026.01.10</FileVersion>
+    <Version>2026.07.30</Version>
+    <AssemblyVersion>2026.07.30</AssemblyVersion>
+    <FileVersion>2026.07.30</FileVersion>
     <Description>OpenRaster plugin for paint.net</Description>
     <UseWPF>true</UseWPF>
   </PropertyGroup>

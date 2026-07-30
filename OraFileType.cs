@@ -41,13 +41,11 @@ namespace OpenRasterFileType {
             SaveExtensions = [".ora"],
             SupportsSavingLayers = true
         }) {
-        protected override IFileTypeLoader OnCreateLoader() {
-            return new Loader(this);
-        }
+        
+        protected override IFileTypeLoader OnCreateLoader() => new Loader(this);
 
-        protected override IFileTypeSaver OnCreateSaver() {
-            return new Saver(this);
-        }
+        protected override IFileTypeSaver OnCreateSaver() => new Saver(this);
+
     }
 
     internal class Loader(OraFileType fileType) : FileTypeLoader(fileType) {
@@ -84,8 +82,14 @@ namespace OpenRasterFileType {
                 double.Parse(GetAttribute(imageElement, "yres", "72"), CultureInfo.InvariantCulture), 
                 MeasurementUnit.Inch
             );
+            
+            XmlNodeList stackElements = stackXml.GetElementsByTagName("stack");
 
-            XmlElement stackElement = (XmlElement)stackXml.GetElementsByTagName("stack")[0];
+            if (stackElements.Count == 0) {
+                throw new FormatException("No stack found in 'stack.xml'");
+            }
+
+            XmlElement stackElement = (XmlElement)stackElements[0];
             XmlNodeList layerElements = stackElement.GetElementsByTagName("layer");
 
             if (layerElements.Count == 0) {
@@ -94,10 +98,9 @@ namespace OpenRasterFileType {
 
             // IFileTypePropertyBag metadata = context.MetadataForSaveOptions;
 
-            int layerCount = layerElements.Count - 1;
             IImagingFactory imagingFactory = Services.GetService<IImagingFactory>();
 
-            for (int i = layerCount; i >= 0; i--) { // The last layer in the list is the background so load in reverse
+            for (int i = layerElements.Count - 1; i >= 0; i--) { // The last layer in the list is the background so load in reverse
                 XmlElement layerElement = (XmlElement)layerElements[i];
                 int x = int.Parse(GetAttribute(layerElement, "x", "0"), CultureInfo.InvariantCulture);
                 int y = int.Parse(GetAttribute(layerElement, "y", "0"), CultureInfo.InvariantCulture);
@@ -112,7 +115,7 @@ namespace OpenRasterFileType {
                     throw new FormatException("Missing layer file");
                 }
 
-                using IBitmapDecoder decoder = imagingFactory.CreateDecoderFromStream(layerStream);
+                using IBitmapDecoder decoder = imagingFactory.CreateDecoder(layerStream);
                 using IFileTypeBitmapLayer bitmapLayer = document.CreateBitmapLayer();
                 IBitmapSource decoded = imagingFactory.CreateFormatConvertedBitmap(decoder.Frames[0], bitmapLayer.PixelFormat);
 
@@ -130,7 +133,7 @@ namespace OpenRasterFileType {
 
                 bitmapLayer.GetBitmap().WriteSource(offset, decoded);
 
-                int layerNum = layerCount - i;
+                int layerNum = layerElements.Count - i;
                 bitmapLayer.Name = GetAttribute(layerElement, "name", $"Layer {layerNum}");
                 bitmapLayer.Opacity = float.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture);
                 bitmapLayer.Visible = GetAttribute(layerElement, "visibility", "visible") == "visible";
@@ -295,8 +298,6 @@ namespace OpenRasterFileType {
 
     public class OraFileTypeFactory : IFileTypeFactory
     {
-        public IFileType[] CreateFileTypes(IFileTypeHost host) {
-            return [new OraFileType(host)];
-        }
+        public IFileType[] CreateFileTypes(IFileTypeHost host) => [new OraFileType(host)];
     }
 }
