@@ -133,7 +133,7 @@ namespace OpenRasterFileType {
 
                 bitmapLayer.GetBitmap().WriteSource(offset, decoded);
 
-                int layerNum = layerElements.Count - i;
+                int layerNum = layerElements.Count - 1 - i;
                 bitmapLayer.Name = GetAttribute(layerElement, "name", $"Layer {layerNum}");
                 bitmapLayer.Opacity = float.Parse(GetAttribute(layerElement, "opacity", "1"), CultureInfo.InvariantCulture);
                 bitmapLayer.Visible = GetAttribute(layerElement, "visibility", "visible") == "visible";
@@ -234,13 +234,12 @@ namespace OpenRasterFileType {
         private static byte[] GetLayerXmlData(IReadOnlyFileTypeLayerList layers, Point[] info, Resolution resolution) {
             using MemoryStream xmlStream = new();
 
-            XmlWriterSettings settings = new() {
+            XmlWriter writer = XmlWriter.Create(xmlStream, new XmlWriterSettings() {
                 Indent = true,
                 OmitXmlDeclaration = false,
                 ConformanceLevel = ConformanceLevel.Document,
                 CloseOutput = false
-            };
-            XmlWriter writer = XmlWriter.Create(xmlStream, settings);
+            });
 
             writer.WriteStartDocument();
 
