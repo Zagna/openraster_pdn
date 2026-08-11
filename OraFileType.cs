@@ -183,7 +183,7 @@ namespace OpenRasterFileType {
 
             using ZipArchive archive = new(context.Output, ZipArchiveMode.Update, true);
 
-            Point[] layerInfo = new Point[context.Document.Layers.Count];
+            Point[] points = new Point[context.Document.Layers.Count];
 
             using IFileTypeCompositeBitmap<ColorBgra32> compositeBitmap = context.Document.GetCompositeBitmap<ColorBgra32>();
 
@@ -211,10 +211,10 @@ namespace OpenRasterFileType {
 
                 if (left < layer.Size.Width && top < layer.Size.Height) { // is the layer not empty
                     bounds = new Rectangle(left, top, right - left + 1, bottom - top + 1); // clip it to the visible rectangle
-                    layerInfo[i] = new Point(left, top);
+                    points[i] = new Point(left, top);
                 }
                 else {
-                    layerInfo[i] = Point.Empty;
+                    points[i] = Point.Empty;
                 }
 
                 using Stream pngStream = archive.CreateEntry("data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png").Open();
@@ -222,7 +222,7 @@ namespace OpenRasterFileType {
             }
 
             using Stream sXML = archive.CreateEntry("stack.xml").Open();
-            sXML.Write(GetLayerXmlData(context.Document.Layers, layerInfo, context.Document.Resolution));
+            sXML.Write(GetLayerXmlData(context.Document, points));
 
             using Stream merge = archive.CreateEntry("mergedimage.png").Open();
             compositeBitmap.ToGdipBitmap().Save(merge, ImageFormat.Png);
@@ -231,7 +231,7 @@ namespace OpenRasterFileType {
             new Bitmap(compositeBitmap.ToGdipBitmap(), GetThumbDimensions(context.Document.Size.Width, context.Document.Size.Height)).Save(thumbStream, ImageFormat.Png);
         }
 
-        private static byte[] GetLayerXmlData(IReadOnlyFileTypeLayerList layers, Point[] info, Resolution resolution) {
+        private static byte[] GetLayerXmlData(IReadOnlyFileTypeDocument doc, Point[] points) {
             using MemoryStream xmlStream = new();
 
             XmlWriter writer = XmlWriter.Create(xmlStream, new XmlWriterSettings() {
@@ -244,30 +244,29 @@ namespace OpenRasterFileType {
             writer.WriteStartDocument();
 
             writer.WriteStartElement("image");
-            writer.WriteAttributeString("w", layers[0].Size.Width.ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("h", layers[0].Size.Height.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("w", doc.Size.Width.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("h", doc.Size.Height.ToString(CultureInfo.InvariantCulture));
             writer.WriteAttributeString("version", "0.0.3"); // mandatory
-
-            writer.WriteAttributeString("xres", resolution.X.ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("yres", resolution.Y.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("xres", doc.Resolution.X.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("yres", doc.Resolution.Y.ToString(CultureInfo.InvariantCulture));
 
             writer.WriteStartElement("stack");
             writer.WriteAttributeString("name", "root");
 
             // ORA stores layers top to bottom
-            for (int i = layers.Count - 1; i >= 0; i--) {
+            for (int i = doc.Layers.Count - 1; i >= 0; i--) {
                 writer.WriteStartElement("layer");
 
-                writer.WriteAttributeString("name", layers[i].Name);
-                writer.WriteAttributeString("opacity", layers[i].Opacity.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("name", doc.Layers[i].Name);
+                writer.WriteAttributeString("opacity", doc.Layers[i].Opacity.ToString(CultureInfo.InvariantCulture));
 
                 writer.WriteAttributeString("src", "data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png");
-                writer.WriteAttributeString("visibility", layers[i].Visible ? "visible" : "hidden");
+                writer.WriteAttributeString("visibility", doc.Layers[i].Visible ? "visible" : "hidden");
 
-                writer.WriteAttributeString("x", info[i].X.ToString(CultureInfo.InvariantCulture));
-                writer.WriteAttributeString("y", info[i].Y.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("x", points[i].X.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("y", points[i].Y.ToString(CultureInfo.InvariantCulture));
 
-                if (Modes.PDN.TryGetValue(layers[i].BlendMode, out string value)) {
+                if (Modes.PDN.TryGetValue(doc.Layers[i].BlendMode, out string value)) {
                     writer.WriteAttributeString("composite-op", value);
                 }
                 else {
