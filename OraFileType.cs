@@ -96,8 +96,6 @@ namespace OpenRasterFileType {
                 throw new FormatException("No layers found in OpenRaster file");
             }
 
-            // IFileTypePropertyBag metadata = context.MetadataForSaveOptions;
-
             IImagingFactory imagingFactory = Services.GetService<IImagingFactory>();
 
             for (int i = layerElements.Count - 1; i >= 0; i--) { // The last layer in the list is the background so load in reverse
@@ -108,6 +106,9 @@ namespace OpenRasterFileType {
                 Point2Int32 offset = new(x, y);
 
                 using MemoryStream layerStream = new();
+                if (!layerElement.HasAttribute("src")) {
+                    throw new FormatException("Missing src attribute");
+                }
                 try {
                     file.GetEntry(layerElement.GetAttribute("src")).Open().CopyTo(layerStream); 
                 }
@@ -141,18 +142,16 @@ namespace OpenRasterFileType {
                 XmlElement parentElement = (XmlElement)layerElement.ParentNode;
                 float parentOpacity = float.Parse(GetAttribute(parentElement, "opacity", "1"), CultureInfo.InvariantCulture);
                 if (parentOpacity != 1 && parentOpacity != bitmapLayer.Opacity) bitmapLayer.Opacity = parentOpacity;
-                bool parentVisible =  GetAttribute(parentElement, "visibility", "visible") == "visible";
+                bool parentVisible = GetAttribute(parentElement, "visibility", "visible") == "visible";
                 if (!parentVisible && parentVisible != bitmapLayer.Visible) bitmapLayer.Visible = parentVisible;
 
                 string compOp = GetAttribute(layerElement, "composite-op", "svg:src-over");
-                compOp = compOp.Contains("pdn-") ? compOp.Replace("pdn-", "pdn:") : compOp;
 
                 if (Modes.SVG.TryGetValue(compOp, out LayerBlendMode value)) {
                     bitmapLayer.BlendMode = value;
                 }
-                else {
-                    string pdnCompOp = "pdn:" + compOp.Split(':')[1];
-                    bitmapLayer.BlendMode = Modes.SVG.TryGetValue(pdnCompOp, out LayerBlendMode pdnValue) ? pdnValue : LayerBlendMode.Normal;
+                else if (Modes.SVG.TryGetValue("pdn:" + compOp.Split(':')[1], out LayerBlendMode pdnValue)) {
+                    bitmapLayer.BlendMode = pdnValue;
                 }
 
                 document.Layers.Insert(layerNum, bitmapLayer);
@@ -171,26 +170,29 @@ namespace OpenRasterFileType {
 
         private const int thumbMaxSize = 256;
 
+        /// <summary>
+        /// Base64 representation of a .zip file containing an uncompressed file called "mimetype" with the content "image/openraster"
+        /// </summary>
         private readonly string mimeTypeZip = "UEsDBBQAAAAAAAAAIQDHmvCMEAAAABAAAAAIAAAAbWltZXR5cGVpbWFnZS9vcGVucmFzdGVyUEsBAhQDFAAAAAAAAAAhAMea8IwQAAAAEAAAAAgAAAAAAAAAAAAAAKSBAAAAAG1pbWV0eXBlUEsFBgAAAAABAAEANgAAADYAAAAAAA==";
 
         protected override void OnSave(IFileTypeSaveContext context) {
             ArgumentNullException.ThrowIfNull(context.Document);
             ArgumentNullException.ThrowIfNull(context.Output);
 
-            byte[] zipBytes = Convert.FromBase64String(mimeTypeZip);
-
-            context.Output.Write(zipBytes);
+            context.Output.Write(Convert.FromBase64String(mimeTypeZip));
 
             using ZipArchive archive = new(context.Output, ZipArchiveMode.Update, true);
-
-            Point[] points = new Point[context.Document.Layers.Count];
-
             using IFileTypeCompositeBitmap<ColorBgra32> compositeBitmap = context.Document.GetCompositeBitmap<ColorBgra32>();
 
-            foreach (var (layer, i) in context.Document.Layers.Select((value, i) => (value, i))) {
-                RectInt32 bounds = compositeBitmap.Bounds();
-                Color pixel;
+            RectInt32 bounds = compositeBitmap.Bounds();
+            using Stream mergeStream = archive.CreateEntry("mergedimage.png").Open();
+            compositeBitmap.ToGdipBitmap().Save(mergeStream, ImageFormat.Png);
 
+            using Stream thumbStream = archive.CreateEntry("Thumbnails/thumbnail.png").Open();
+            new Bitmap(compositeBitmap.ToGdipBitmap(), GetThumbDimensions(context.Document.Size.Width, context.Document.Size.Height)).Save(thumbStream, ImageFormat.Png);
+
+            Point[] points = new Point[context.Document.Layers.Count];
+            foreach ((IReadOnlyFileTypeLayer layer, int i) in context.Document.Layers.Select((value, i) => (value, i))) {
                 Bitmap layerBitMap = layer.GetBitmap().ToGdipBitmap();
 
                 int left = layer.Size.Width;
@@ -199,7 +201,7 @@ namespace OpenRasterFileType {
                 int bottom = 0;
                 for (int y = 0; y < layer.Size.Height; y++) {
                     for (int x = 0; x < layer.Size.Width; x++) {
-                        pixel = layerBitMap.GetPixel(x, y);
+                        Color pixel = layerBitMap.GetPixel(x, y);
                         if (pixel.A > 0) {
                             left = x < left ? x : left;
                             right = x > right ? x : right;
@@ -209,32 +211,23 @@ namespace OpenRasterFileType {
                     }
                 }
 
+                RectInt32 layerBounds = bounds;
+                points[i] = Point.Empty;
                 if (left < layer.Size.Width && top < layer.Size.Height) { // is the layer not empty
-                    bounds = new Rectangle(left, top, right - left + 1, bottom - top + 1); // clip it to the visible rectangle
+                    layerBounds = new Rectangle(left, top, right - left + 1, bottom - top + 1); // clip it to the visible rectangle
                     points[i] = new Point(left, top);
-                }
-                else {
-                    points[i] = Point.Empty;
                 }
 
                 using Stream pngStream = archive.CreateEntry("data/layer" + i.ToString(CultureInfo.InvariantCulture) + ".png").Open();
-                layerBitMap.Clone(bounds, layerBitMap.PixelFormat).Save(pngStream, ImageFormat.Png);
+                layerBitMap.Clone(layerBounds, layerBitMap.PixelFormat).Save(pngStream, ImageFormat.Png);
             }
 
-            using Stream sXML = archive.CreateEntry("stack.xml").Open();
-            sXML.Write(GetLayerXmlData(context.Document, points));
-
-            using Stream merge = archive.CreateEntry("mergedimage.png").Open();
-            compositeBitmap.ToGdipBitmap().Save(merge, ImageFormat.Png);
-
-            using Stream thumbStream = archive.CreateEntry("Thumbnails/thumbnail.png").Open();
-            new Bitmap(compositeBitmap.ToGdipBitmap(), GetThumbDimensions(context.Document.Size.Width, context.Document.Size.Height)).Save(thumbStream, ImageFormat.Png);
+            using Stream stackStream = archive.CreateEntry("stack.xml").Open();
+            GetLayerXmlData(stackStream, context.Document, points);
         }
 
-        private static byte[] GetLayerXmlData(IReadOnlyFileTypeDocument doc, Point[] points) {
-            using MemoryStream xmlStream = new();
-
-            XmlWriter writer = XmlWriter.Create(xmlStream, new XmlWriterSettings() {
+        private static void GetLayerXmlData(Stream stackStream, IReadOnlyFileTypeDocument doc, Point[] points) {
+            XmlWriter writer = XmlWriter.Create(stackStream, new XmlWriterSettings() {
                 Indent = true,
                 OmitXmlDeclaration = false,
                 ConformanceLevel = ConformanceLevel.Document,
@@ -266,12 +259,7 @@ namespace OpenRasterFileType {
                 writer.WriteAttributeString("x", points[i].X.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("y", points[i].Y.ToString(CultureInfo.InvariantCulture));
 
-                if (Modes.PDN.TryGetValue(doc.Layers[i].BlendMode, out string value)) {
-                    writer.WriteAttributeString("composite-op", value);
-                }
-                else {
-                    writer.WriteAttributeString("composite-op", "svg:src-over");
-                }
+                writer.WriteAttributeString("composite-op", Modes.PDN.TryGetValue(doc.Layers[i].BlendMode, out string value) ? value : "svg:src-over");
 
                 writer.WriteEndElement();
             }
@@ -281,8 +269,6 @@ namespace OpenRasterFileType {
             writer.WriteEndDocument();
 
             writer.Close();
-
-            return xmlStream.ToArray();
         }
 
         private static Size GetThumbDimensions(int width, int height) {
@@ -294,8 +280,7 @@ namespace OpenRasterFileType {
         }
     }
 
-    public class OraFileTypeFactory : IFileTypeFactory
-    {
+    public class OraFileTypeFactory : IFileTypeFactory {
         public IFileType[] CreateFileTypes(IFileTypeHost host) => [new OraFileType(host)];
     }
 }
