@@ -29,7 +29,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore -c Release
     - name: Test
       run: dotnet test --no-build --verbosity normal
     - name: Get XML
@@ -42,4 +42,4 @@ jobs:
       uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ steps.getxml.outputs.info }}
-        files: ./bin/Release/net11.0-windows/OpenRasterFileType.dll
+        files: /home/runner/work/openraster_pdn/openraster_pdn/bin/Release/net11.0-windows/OpenRasterFileType.dll
