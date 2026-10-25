@@ -29,6 +29,7 @@
     <FileVersion>2026.10.24</FileVersion>
     <Description>OpenRaster plugin for paint.net</Description>
     <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Paint.NET.Plugin.SDK" Version="5.2.0-beta.5.200.9793.3533" />
