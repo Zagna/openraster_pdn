@@ -34,7 +34,7 @@ jobs:
       run: dotnet test --no-build --verbosity normal
     - name: Get XML
       id: getxml
-      uses: mavrosxristoforos/get-xml-info@2
+      uses: mavrosxristoforos/get-xml-info@2.2.1
       with:
         xml-file: 'OpenRaster Filetype.csproj'
         xpath: '//Project//PropertyGroup//Version'
